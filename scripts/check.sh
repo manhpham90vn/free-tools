@@ -1,30 +1,20 @@
 #!/usr/bin/env bash
+# Check script - runs all quality checks: compile, format, lint, type check
+# Usage: ./scripts/check.sh
 
-if ! command -v python >/dev/null 2>&1; then
-  echo "❌ python not found in PATH"
-  exit 1
-fi
+set -euo pipefail
 
-if [ ! -d ".venv" ]; then
-  echo "📦 Creating virtual environment..."
-  python -m venv .venv
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/common.sh"
 
-  echo "⬆️ Installing dependencies..."
-  if [ -f "requirements.txt" ]; then
-    ./.venv/bin/pip install -r requirements.txt
-  else
-    echo "⚠️ No requirements.txt found"
-  fi
-fi
+# ── Ensure environment ──
+ensure_venv
 
-echo "Compiling..."
-./.venv/bin/python -m compileall . -q
+# ── Run checks ──
+run_step "Formatting check..."  ruff format . --check
 
-echo "Formatting..."
-./.venv/bin/ruff format . --check
+run_step "Linting..."  ruff check .
 
-echo "Linting..."
-./.venv/bin/ruff check .
+run_step "Type checking..."  mypy .
 
-echo "Type checking..."
-./.venv/bin/mypy .
+ok "All checks passed"

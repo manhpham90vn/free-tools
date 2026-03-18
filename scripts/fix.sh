@@ -1,24 +1,18 @@
 #!/usr/bin/env bash
+# Fix script - auto-fixes formatting and linting issues
+# Usage: ./scripts/fix.sh
 
-if ! command -v python >/dev/null 2>&1; then
-  echo "❌ python not found in PATH"
-  exit 1
-fi
+set -euo pipefail
 
-if [ ! -d ".venv" ]; then
-  echo "📦 Creating virtual environment..."
-  python -m venv .venv
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/common.sh"
 
-  echo "⬆️ Installing dependencies..."
-  if [ -f "requirements.txt" ]; then
-    ./.venv/bin/pip install -r requirements.txt
-  else
-    echo "⚠️ No requirements.txt found"
-  fi
-fi
+# ── Ensure environment ──
+ensure_venv
 
-echo "Formatting..."
-./.venv/bin/ruff format .
+# ── Run fixes ──
+run_step "Formatting..."  ruff format .
 
-echo "Linting..."
-./.venv/bin/ruff check . --fix
+run_step "Linting..."  ruff check . --fix
+
+ok "All fixes applied"

@@ -1,70 +1,140 @@
 """
-DNS manipulation module for Antigravity MITM proxy.
-Manages /etc/hosts entries to redirect traffic to localhost.
+DNS Manipulation Module for Antigravity MITM Proxy.
+
+This module manages /etc/hosts entries to redirect traffic to localhost.
+
+How DNS spoofing works:
+1. We add entries to /etc/hosts mapping target hostnames to 127.0.0.1
+2. When the client (Antigravity, Cursor, etc.) tries to connect to the API,
+   the OS resolves the hostname to 127.0.0.1 (our proxy)
+3. Our MITM proxy receives the connection and handles it
+
+The entries are wrapped in marker comments (BEGIN/END ANTIGRAVITY MITM)
+so we can cleanly add and remove them without affecting other /etc/hosts entries.
+
+Example /etc/hosts block:
+    # BEGIN ANTIGRAVITY MITM
+    127.0.0.1 daily-cloudcode-pa.googleapis.com
+    127.0.0.1 cloudcode-pa.googleapis.com
+    # END ANTIGRAVITY MITM
 """
 
-import subprocess
-from pathlib import Path
-from typing import List
+# === Standard library imports ===
+import subprocess  # For running system commands (DNS cache flush)
+from pathlib import Path  # For filesystem operations
+from typing import List  # Type hints
 
+# Path to the system hosts file
 ETC_HOSTS = Path("/etc/hosts")
+
+# Marker comments used to identify our block in /etc/hosts
+# These allow us to cleanly add/remove entries without affecting other entries
 MARKER_START = "# BEGIN ANTIGRAVITY MITM"
 MARKER_END = "# END ANTIGRAVITY MITM"
 
 
+# =============================================================================
+# INTERNAL HELPERS
+# =============================================================================
+
+
 def _read_hosts() -> List[str]:
-    """Read /etc/hosts file."""
+    """
+    Read the /etc/hosts file and return its lines.
+
+    Returns:
+        List of lines from /etc/hosts (with newlines preserved)
+    """
     return ETC_HOSTS.read_text().splitlines(keepends=True)
 
 
 def _write_hosts(lines: List[str]) -> None:
-    """Write /etc/hosts file."""
+    """
+    Write lines back to /etc/hosts.
+
+    Args:
+        lines: List of lines to write (should include newlines)
+    """
     ETC_HOSTS.write_text("".join(lines))
 
 
 def _run_command(cmd: List[str]) -> None:
-    """Run a command. Assumes already running as root (via sudo in main.py)."""
+    """
+    Run a system command. Assumes already running as root.
+
+    Args:
+        cmd: Command and arguments as a list
+
+    Raises:
+        RuntimeError: If the command fails (non-zero exit code)
+    """
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         raise RuntimeError(f"Command failed: {' '.join(cmd)}\n{result.stderr}")
 
 
 def _remove_existing_block(lines: List[str]) -> List[str]:
-    """Remove existing Antigravity block from hosts file."""
+    """
+    Remove the existing Antigravity block from /etc/hosts lines.
+
+    Scans through the lines and removes everything between
+    MARKER_START and MARKER_END (inclusive).
+
+    Args:
+        lines: Current lines from /etc/hosts
+
+    Returns:
+        Lines with the Antigravity block removed
+    """
     result = []
     in_block = False
 
     for line in lines:
+        # Start of our block - skip this line and set flag
         if MARKER_START in line:
             in_block = True
             continue
+        # End of our block - skip this line and clear flag
         if MARKER_END in line:
             in_block = False
             continue
+        # Only keep lines that are NOT inside our block
         if not in_block:
             result.append(line)
 
     return result
 
 
+# =============================================================================
+# PUBLIC API
+# =============================================================================
+
+
 def add_hosts(hosts: List[str]) -> None:
     """
-    Add hosts entries to /etc/hosts to redirect to 127.0.0.1.
+    Add host entries to /etc/hosts to redirect traffic to 127.0.0.1.
+
+    This is the core of DNS spoofing. Each hostname gets an entry
+    pointing to 127.0.0.1 (localhost), so when the client tries to
+    connect to the API, it connects to our MITM proxy instead.
+
+    The entries are wrapped in marker comments for easy removal.
 
     Args:
-        hosts: List of hostnames to redirect
+        hosts: List of hostnames to redirect (e.g., ["cloudcode-pa.googleapis.com"])
     """
     lines = _read_hosts()
 
-    # Remove existing block if present
+    # Remove existing block if present (idempotent operation)
     lines = _remove_existing_block(lines)
 
-    # Build new block
+    # Build new block with marker comments
     block = f"\n{MARKER_START}\n"
     for host in hosts:
         block += f"127.0.0.1 {host}\n"
     block += f"{MARKER_END}\n"
 
+    # Append to hosts file
     lines.append(block)
     _write_hosts(lines)
 
@@ -76,10 +146,13 @@ def add_hosts(hosts: List[str]) -> None:
 
 def remove_hosts(hosts: List[str]) -> None:
     """
-    Remove hosts entries from /etc/hosts.
+    Remove our host entries from /etc/hosts.
+
+    Removes the entire Antigravity block (between markers).
+    Other entries in /etc/hosts are not affected.
 
     Args:
-        hosts: List of hostnames to remove
+        hosts: List of hostnames (used only for logging)
     """
     lines = _read_hosts()
     lines = _remove_existing_block(lines)
@@ -89,21 +162,32 @@ def remove_hosts(hosts: List[str]) -> None:
 
 def is_enabled(hosts: List[str]) -> bool:
     """
-    Check if the hosts entries are currently enabled.
+    Check if DNS spoofing is currently enabled.
+
+    Looks for our marker comment in /etc/hosts.
 
     Args:
-        hosts: List of hostnames to check
+        hosts: List of hostnames (not used, kept for API consistency)
 
     Returns:
-        True if entries exist, False otherwise
+        True if our entries exist in /etc/hosts
     """
     content = ETC_HOSTS.read_text()
     return MARKER_START in content
 
 
 def flush_dns_cache() -> None:
-    """Flush system DNS cache."""
-    # Try different methods
+    """
+    Flush the system DNS cache so /etc/hosts changes take effect immediately.
+
+    Tries multiple methods since different Linux distributions use
+    different DNS cache managers:
+    1. resolvectl flush-caches (systemd-resolved, modern Ubuntu/Fedora)
+    2. systemd-resolve --flush-caches (older systemd)
+    3. service nscd flush (nscd daemon)
+
+    If none work, prints instructions for manual flushing.
+    """
     methods = [
         ["resolvectl", "flush-caches"],
         ["systemd-resolve", "--flush-caches"],
@@ -116,8 +200,9 @@ def flush_dns_cache() -> None:
             print(f"DNS cache flushed via {' '.join(cmd)}")
             return
         except (FileNotFoundError, RuntimeError):
-            continue
+            continue  # Try next method
 
+    # None of the methods worked
     print("Warning: Could not flush DNS cache. You may need to flush manually:")
     print("  resolvectl flush-caches")
     print("  or")

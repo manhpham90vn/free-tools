@@ -1,53 +1,55 @@
-# Configuration for Antigravity MITM Proxy
+# =============================================================================
+# Free Antigravity - MITM Proxy Configuration
+# =============================================================================
 
-# Target provider: claude, openai, gemini (default: claude)
+# ─────────────────────────────────────────────────────────────────────────────
+# TARGET PROVIDER
+# Which LLM provider to forward requests to
+# Options: claude, openai, gemini, ollama
+# ─────────────────────────────────────────────────────────────────────────────
 target_provider: claude
 
-# Custom endpoint to forward requests to.
-# Can also be set via ANTHROPIC_BASE_URL env var.
-# target_endpoint: "https://api.anthropic.com/v1/messages"
+# Default model when no mapping is found
+default_model: "claude-sonnet-4-6"
 
-# API key for the custom endpoint.
-# Can also be set via ANTHROPIC_AUTH_TOKEN env var.
-# api_key: "sk-ant-xxx"
+# ─────────────────────────────────────────────────────────────────────────────
+# MODEL MAPPING
+# Map source model names to target model names
+# Format: "source_model": "target_model"
+# ─────────────────────────────────────────────────────────────────────────────
+model_mapping:
+  # Gemini models → Claude
+  gemini-2.5-pro: claude-opus-4-6
+  gemini-2.5-flash-thinking: claude-sonnet-4-6
+  gemini-2.5-flash: claude-sonnet-4-6
+  gemini-2.5-flash-lite: claude-haiku-3-5
+  gemini-2.0-flash: claude-sonnet-4-6
 
-# Provider-specific endpoints (optional, overrides target_endpoint)
-# providers:
-#   claude:
-#     endpoint: "https://api.anthropic.com/v1/messages"
-#     # api_key via ANTHROPIC_AUTH_TOKEN env
-#   openai:
-#     endpoint: "https://api.openai.com/v1/chat/completions"
-#     # api_key via OPENAI_API_KEY env
-#   ollama:
-#     endpoint: "http://localhost:11434/api/chat"
+  # Claude models → Claude
+  claude-opus-4-6-thinking: claude-opus-4-6
+  claude-sonnet-4-6: claude-sonnet-4-6
 
-# Hosts to intercept (will be mapped to 127.0.0.1 in /etc/hosts)
+  # OpenAI models → Claude
+  gpt-4o: claude-sonnet-4-6
+  gpt-4o-mini: claude-haiku-3-5
+
+# ─────────────────────────────────────────────────────────────────────────────
+# NETWORK
+# Traffic interception settings
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Hostnames to intercept (DNS spoofed to 127.0.0.1)
 hosts:
   - daily-cloudcode-pa.googleapis.com
   - cloudcode-pa.googleapis.com
 
-# Model name mapping: original Gemini model -> target Anthropic model
-model_mapping:
-  gemini-3.1-pro-high: claude-opus-4-6
-  gemini-3.1-pro-low: claude-opus-4-6
-  gemini-3-pro-high: claude-opus-4-6
-  gemini-3-pro-low: claude-opus-4-6
-  gemini-3-flash: claude-opus-4-6
-  gemini-3-flash-agent: claude-opus-4-6
-  gemini-2.5-flash: claude-opus-4-6
-  gemini-2.5-flash-lite: claude-opus-4-6
-  gemini-2.5-flash-thinking: claude-opus-4-6
-  gemini-2.5-pro: claude-opus-4-6
-  claude-opus-4-6-thinking: claude-opus-4-6
-  claude-sonnet-4-6: claude-opus-4-6
-  gpt-oss-120b-medium: claude-opus-4-6
-
-# Default model when no mapping found
-default_model: claude-opus-4-6
-
-# Port configuration
+# Port for MITM server to listen on (default: 443)
 listen_port: 443
 
-# Certificate directory
+# ─────────────────────────────────────────────────────────────────────────────
+# CERTIFICATES
+# SSL/TLS certificate storage
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Directory to store Root CA and generated certificates
 cert_dir: "~/.free-antigravity"
