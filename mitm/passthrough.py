@@ -88,6 +88,9 @@ async def passthrough(
         if key.lower() not in hop_by_hop:
             forward_headers[key] = value
 
+    # Ensure Host header points to the real server
+    forward_headers["host"] = hostname
+
     forward_headers[LOOP_HEADER] = LOOP_VALUE
 
     # Create SSL context that doesn't verify (we're MITM ourselves)
@@ -112,9 +115,12 @@ async def passthrough(
                 status_line = f"HTTP/1.1 {resp.status} {resp.reason}\r\n"
                 writer.write(status_line.encode())
 
-                # Forward headers
+                # Forward headers (except content-encoding since aiohttp decompresses)
                 for key, value in resp.headers.items():
-                    if key.lower() not in hop_by_hop:
+                    if (
+                        key.lower() not in hop_by_hop
+                        and key.lower() != "content-encoding"
+                    ):
                         writer.write(f"{key}: {value}\r\n".encode())
 
                 writer.write(b"Connection: close\r\n")
@@ -142,11 +148,11 @@ async def passthrough(
                         body_str = resp_body.decode(errors="replace")
                         parsed = json.loads(body_str)
                         print(
-                            f"[PASSTHROUGH] Body: {json.dumps(parsed, indent=2)[:5000]}"
+                            f"[PASSTHROUGH] Body: {json.dumps(parsed, indent=2)[:10]}"
                         )
                     except Exception:
                         print(
-                            f"[PASSTHROUGH] Body (raw): {resp_body[:1000].decode(errors='replace')}"
+                            f"[PASSTHROUGH] Body (raw): {resp_body[:10].decode(errors='replace')}"
                         )
 
                 print(f"[PASSTHROUGH] Forwarded {len(resp_body)} bytes")
@@ -157,6 +163,7 @@ async def passthrough(
     finally:
         try:
             writer.close()
+            await writer.wait_closed()
         except Exception:
             pass
 

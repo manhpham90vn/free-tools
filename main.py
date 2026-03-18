@@ -17,14 +17,10 @@ from hostsutil.hosts import add_hosts, remove_hosts, flush_dns_cache, is_enabled
 from mitm.cert import load_or_create_root_ca
 from mitm.server import MITMServer
 
-# Load .env file if exists (use env override for pkexec, else script directory)
+# Load .env file if exists (use env override for sudo, else script directory)
 _script_dir = Path(__file__).resolve().parent
 _dotenv_path = os.environ.get("_FA_DOTENV", str(_script_dir / ".env"))
 load_dotenv(_dotenv_path)
-
-
-# Environment variable to prevent pkexec loop
-SELF_EXEC_VAR = "_FREE_ANTIGRAVITY_SELF"
 
 
 def load_config(config_path: str = "config.yaml") -> dict:
@@ -39,23 +35,23 @@ def load_config(config_path: str = "config.yaml") -> dict:
 
 
 def ensure_root():
-    """Ensure running as root, using pkexec if needed."""
+    """Ensure running as root, using sudo if needed."""
     if os.geteuid() == 0:
         return  # Already root
 
-    # Check if we're already in a pkexec session
-    if os.environ.get(SELF_EXEC_VAR):
+    # Check if we're already in a sudo session
+    if os.environ.get("_FA_SUDO"):
         print("Error: Failed to obtain root privileges.")
         sys.exit(1)
 
-    # Re-execute with pkexec
-    print("[*] Requesting root privileges via pkexec...")
+    # Re-execute with sudo
+    print("[*] Requesting root privileges via sudo...")
 
-    # Resolve paths and env vars BEFORE pkexec (it strips env for security)
+    # Resolve paths and env vars BEFORE sudo (it may strip env for security)
     cert_dir = str(Path("~/.free-antigravity").expanduser().resolve())
     dotenv_path = str((_script_dir / ".env").resolve())
 
-    # Resolve absolute paths before pkexec (it doesn't preserve cwd)
+    # Resolve absolute paths before sudo (it doesn't preserve cwd)
     script = str(Path(__file__).resolve())
     cwd = os.getcwd()
 
@@ -81,10 +77,10 @@ def ensure_root():
             str(Path(cwd, "config.yaml").resolve()),
         ] + resolved_args
 
-    # pkexec strips env vars for security, so use `env` to set them
-    # Build: pkexec env VAR1=val1 VAR2=val2 python3 script.py ...
+    # sudo may strip env vars for security, so use `env` to set them
+    # Build: sudo env VAR1=val1 VAR2=val2 python3 script.py ...
     env_args = [
-        f"{SELF_EXEC_VAR}=1",
+        "_FA_SUDO=1",
         f"_FA_CERT_DIR={cert_dir}",
         f"_FA_DOTENV={dotenv_path}",
     ]
@@ -95,13 +91,13 @@ def ensure_root():
         if val:
             env_args.append(f"{key}={val}")
 
-    cmd = ["pkexec", "env"] + env_args + [sys.executable, script] + resolved_args
-    os.execvp("pkexec", cmd)
+    cmd = ["sudo", "env"] + env_args + [sys.executable, script] + resolved_args
+    os.execvp("sudo", cmd)
 
 
 def _resolve_config(config: dict) -> dict:
-    """Resolve paths in config, using env overrides from pkexec."""
-    # Use cert_dir from env (set before pkexec) if available
+    """Resolve paths in config, using env overrides from sudo."""
+    # Use cert_dir from env (set before sudo) if available
     cert_dir = os.environ.get("_FA_CERT_DIR") or config.get(
         "cert_dir", "~/.free-antigravity"
     )
@@ -174,7 +170,7 @@ def cmd_install_ca(args):
         # macOS
         print("On macOS, you can install the CA with:")
         print(
-            f"  pkexec security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain {cert_path}"
+            f"  sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain {cert_path}"
         )
         print()
         print("Or use the GUI:")
@@ -188,12 +184,12 @@ def cmd_install_ca(args):
         print("On Linux, you have several options:")
         print()
         print("Option 1 - Debian/Ubuntu:")
-        print(f"  pkexec cp {cert_path} /usr/local/share/ca-certificates/")
-        print("  pkexec update-ca-certificates")
+        print(f"  sudo cp {cert_path} /usr/local/share/ca-certificates/")
+        print("  sudo update-ca-certificates")
         print()
         print("Option 2 - Fedora/RHEL:")
-        print(f"  pkexec cp {cert_path} /etc/pki/ca-trust/source/anchors/")
-        print("  pkexec update-ca-trust")
+        print(f"  sudo cp {cert_path} /etc/pki/ca-trust/source/anchors/")
+        print("  sudo update-ca-trust")
         print()
         print("Option 3 - Chrome (per-user, no sudo needed):")
         print("  1. Open chrome://settings/certificates")

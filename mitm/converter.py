@@ -135,19 +135,88 @@ def convert_request(
         claude_tools = []
         for tool_group in tools_raw:
             for func in tool_group.get("functionDeclarations", []):
+                raw_schema = func.get("parameters", {})
+                # Convert Gemini schema to Claude-compatible JSON Schema draft 2020-12
+                schema = _convert_schema(raw_schema)
+                # Claude requires top-level input_schema to be type "object"
+                schema["type"] = "object"
+                if "properties" not in schema:
+                    schema["properties"] = {}
                 claude_tools.append(
                     {
                         "name": func["name"],
                         "description": func.get("description", ""),
-                        "input_schema": func.get(
-                            "parameters", {"type": "object", "properties": {}}
-                        ),
+                        "input_schema": schema,
                     }
                 )
         if claude_tools:
             claude_req["tools"] = claude_tools
+            print(f"[TOOLS] Converted {len(claude_tools)} tools to Claude format")
 
     return claude_req
+
+
+# Gemini schema keys that are NOT valid in JSON Schema draft 2020-12
+_GEMINI_ONLY_KEYS = {"nullable", "format", "title", "minimum", "maximum"}
+
+
+def _convert_schema(schema: Any) -> Dict[str, Any]:
+    """Convert a Gemini parameter schema to JSON Schema draft 2020-12 for Claude.
+
+    Gemini uses a subset of OpenAPI 3.0 schema which differs from JSON Schema:
+    - Uses "nullable: true" instead of anyOf with null
+    - May have non-standard keys
+    - Top-level must be type "object" for Claude
+    """
+    if not isinstance(schema, dict) or not schema:
+        return {"type": "object", "properties": {}}
+
+    result: Dict[str, Any] = {}
+
+    # Map type (Gemini uses uppercase sometimes)
+    schema_type = schema.get("type", "object")
+    if isinstance(schema_type, str):
+        schema_type = schema_type.lower()
+        # Gemini type mappings
+        type_map = {
+            "string": "string",
+            "number": "number",
+            "integer": "integer",
+            "boolean": "boolean",
+            "array": "array",
+            "object": "object",
+        }
+        schema_type = type_map.get(schema_type, "string")
+    result["type"] = schema_type
+
+    # Description
+    if "description" in schema:
+        result["description"] = schema["description"]
+
+    # Enum
+    if "enum" in schema:
+        result["enum"] = schema["enum"]
+
+    # Properties (recursive)
+    if "properties" in schema:
+        result["properties"] = {}
+        for key, val in schema["properties"].items():
+            result["properties"][key] = _convert_schema(val)
+
+    # Required
+    if "required" in schema:
+        result["required"] = schema["required"]
+
+    # Items (for arrays)
+    if "items" in schema:
+        result["items"] = _convert_schema(schema["items"])
+
+    # anyOf / oneOf (recursive)
+    for combo_key in ("anyOf", "oneOf"):
+        if combo_key in schema:
+            result[combo_key] = [_convert_schema(s) for s in schema[combo_key]]
+
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -167,7 +236,7 @@ class StreamState:
         "usage",
     )
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.message_id: str = ""
         self.model: str = ""
         self.tool_call_accum: Dict[int, Dict] = {}  # index → {id, name, arguments}

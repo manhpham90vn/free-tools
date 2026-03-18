@@ -317,7 +317,7 @@ class MITMServer:
             if e.errno == 98:  # Address already in use
                 print(f"Error: Port {port} is already in use.")
                 print("Please kill the existing process first:")
-                print(f"  pkexec fuser -k {port}/tcp")
+                print(f"  sudo fuser -k {port}/tcp")
                 raise SystemExit(1)
             raise
 

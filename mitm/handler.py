@@ -194,6 +194,11 @@ async def forward_to_target_streaming(
     print(f"[STREAM] Tools: {len(claude_req.get('tools', []))}")
     print(f"[STREAM] System: {str(claude_req.get('system', ''))[:100]}...")
 
+    # Dump tools for debugging
+    for i, tool in enumerate(claude_req.get("tools", [])):
+        schema = tool.get("input_schema", {})
+        print(f"[TOOLS] [{i}] {tool['name']}: {json.dumps(schema)[:200]}")
+
     # Use Anthropic SDK for streaming (async)
     try:
         import httpx
@@ -211,15 +216,23 @@ async def forward_to_target_streaming(
             api_key=api_key,
         )
 
+        # Build stream kwargs, omitting None values so Anthropic SDK uses defaults
+        stream_kwargs: dict[str, Any] = {
+            "model": claude_req.get("model", target_model),
+            "messages": claude_req.get("messages", []),
+            "max_tokens": claude_req.get("max_tokens", 16384),
+        }
+        if claude_req.get("system") is not None:
+            stream_kwargs["system"] = claude_req["system"]
+        if claude_req.get("tools") is not None:
+            stream_kwargs["tools"] = claude_req["tools"]
+        if claude_req.get("temperature") is not None:
+            stream_kwargs["temperature"] = claude_req["temperature"]
+
         # Start streaming
-        async with client.messages.stream(
-            model=claude_req.get("model", target_model),
-            messages=claude_req.get("messages", []),
-            system=claude_req.get("system"),
-            tools=claude_req.get("tools"),
-            max_tokens=claude_req.get("max_tokens", 16384),
-            temperature=claude_req.get("temperature"),
-        ) as stream:
+        print(f"[STREAM] Connecting to {target_url}...")
+        async with client.messages.stream(**stream_kwargs) as stream:
+            print("[STREAM] Connected, sending response headers...")
             # Send HTTP response headers
             status_line = "HTTP/1.1 200 OK\r\n"
             writer.write(status_line.encode())
@@ -234,11 +247,15 @@ async def forward_to_target_streaming(
             state.model = target_model
 
             # Process stream events
+            event_count = 0
             async for event in stream:
+                event_count += 1
                 event_type = event.type
+                if event_count <= 3:
+                    print(f"[STREAM] Event #{event_count}: {event_type}")
 
                 # Build event dict for converter
-                event_dict = {"type": event_type}
+                event_dict: dict[str, Any] = {"type": event_type}
 
                 if hasattr(event, "message"):
                     event_dict["message"] = event.message.model_dump()
@@ -265,6 +282,7 @@ async def forward_to_target_streaming(
                         break
 
             # Send empty data to signal end
+            print(f"[STREAM] Done, processed {event_count} events")
             try:
                 writer.write(b"data: \r\n\r\n")
                 await writer.drain()

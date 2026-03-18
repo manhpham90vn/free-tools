@@ -23,7 +23,7 @@ def _write_hosts(lines: List[str]) -> None:
 
 
 def _run_command(cmd: List[str]) -> None:
-    """Run a command. Assumes already running as root (via pkexec in main.py)."""
+    """Run a command. Assumes already running as root (via sudo in main.py)."""
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         raise RuntimeError(f"Command failed: {' '.join(cmd)}\n{result.stderr}")
