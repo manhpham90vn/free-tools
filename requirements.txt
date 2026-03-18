@@ -1,0 +1,9 @@
+cryptography>=46.0.5
+pyyaml>=6.0.3
+aiohttp>=3.13.3
+dnspython>=2.8.0
+ruff>=0.15.6
+python-dotenv>=1.2.2
+mypy>=1.19.1
+types-PyYAML>=6.0.12.20250915
+anthropic>=0.85.0
