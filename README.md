@@ -1,6 +1,6 @@
-# Free Antigravity
+# Free Tools
 
-A powerful MITM (Man-in-the-Middle) proxy that intercepts LLM API requests from Google's Antigravity Cloud Code extension and forwards them to any LLM provider of your choice.
+A MITM proxy that intercepts requests from Antigravity IDE and forwards them to any LLM provider via custom Anthropic API endpoint.
 
 ## 🎯 Goals
 
@@ -27,8 +27,8 @@ Supports importing tokens from multiple sources and automatic protocol translati
 ### 1. Installation
 
 ```bash
-git clone https://github.com/manhpham90vn/free-antigravity.git
-cd free-antigravity
+git clone https://github.com/manhpham90vn/free-tools.git
+cd free-tools
 
 python -m venv .venv
 source .venv/bin/activate

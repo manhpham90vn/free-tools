@@ -1,5 +1,5 @@
 """
-Transparent Passthrough Proxy for Antigravity MITM Proxy.
+Transparent Passthrough Proxy for Free Tools MITM Proxy.
 
 This module handles requests that should NOT be intercepted.
 When the MITM proxy receives a request that doesn't match any
@@ -36,7 +36,7 @@ from .utils import send_error_response  # Utility for sending error responses
 # If we receive a request with this header, it means the request
 # came from our own proxy → drop it to prevent infinite loops.
 LOOP_HEADER = "x-request-source"
-LOOP_VALUE = "antigravity-mitm"
+LOOP_VALUE = "free-tools-mitm"
 
 
 def resolve_real_ip(hostname: str) -> str:
@@ -207,7 +207,7 @@ async def passthrough(
                     await writer.drain()
 
                 # Debug logging for key endpoints
-                # These endpoints are useful for debugging Antigravity integration
+                # These endpoints are useful for debugging integration
                 if any(
                     ep in path
                     for ep in (

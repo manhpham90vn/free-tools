@@ -1,22 +1,22 @@
 """
-DNS Manipulation Module for Antigravity MITM Proxy.
+DNS Manipulation Module for Free Tools MITM Proxy.
 
 This module manages /etc/hosts entries to redirect traffic to localhost.
 
 How DNS spoofing works:
 1. We add entries to /etc/hosts mapping target hostnames to 127.0.0.1
-2. When the client (Antigravity, Cursor, etc.) tries to connect to the API,
+2. When the client (IDE, Cursor, etc.) tries to connect to the API,
    the OS resolves the hostname to 127.0.0.1 (our proxy)
 3. Our MITM proxy receives the connection and handles it
 
-The entries are wrapped in marker comments (BEGIN/END ANTIGRAVITY MITM)
+The entries are wrapped in marker comments (BEGIN/END FREE TOOLS MITM)
 so we can cleanly add and remove them without affecting other /etc/hosts entries.
 
 Example /etc/hosts block:
-    # BEGIN ANTIGRAVITY MITM
+    # BEGIN FREE TOOLS MITM
     127.0.0.1 daily-cloudcode-pa.googleapis.com
     127.0.0.1 cloudcode-pa.googleapis.com
-    # END ANTIGRAVITY MITM
+    # END FREE TOOLS MITM
 """
 
 # === Standard library imports ===
@@ -29,8 +29,8 @@ ETC_HOSTS = Path("/etc/hosts")
 
 # Marker comments used to identify our block in /etc/hosts
 # These allow us to cleanly add/remove entries without affecting other entries
-MARKER_START = "# BEGIN ANTIGRAVITY MITM"
-MARKER_END = "# END ANTIGRAVITY MITM"
+MARKER_START = "# BEGIN FREE TOOLS MITM"
+MARKER_END = "# END FREE TOOLS MITM"
 
 
 # =============================================================================
@@ -75,7 +75,7 @@ def _run_command(cmd: List[str]) -> None:
 
 def _remove_existing_block(lines: List[str]) -> List[str]:
     """
-    Remove the existing Antigravity block from /etc/hosts lines.
+    Remove the existing Free Tools block from /etc/hosts lines.
 
     Scans through the lines and removes everything between
     MARKER_START and MARKER_END (inclusive).
@@ -84,7 +84,7 @@ def _remove_existing_block(lines: List[str]) -> List[str]:
         lines: Current lines from /etc/hosts
 
     Returns:
-        Lines with the Antigravity block removed
+        Lines with the Free Tools block removed
     """
     result = []
     in_block = False
@@ -148,7 +148,7 @@ def remove_hosts(hosts: List[str]) -> None:
     """
     Remove our host entries from /etc/hosts.
 
-    Removes the entire Antigravity block (between markers).
+    Removes the entire Free Tools block (between markers).
     Other entries in /etc/hosts are not affected.
 
     Args:

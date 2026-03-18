@@ -49,7 +49,7 @@ Example flow:
 
 # === Internal imports ===
 from .base import BaseAdapter  # Base class for all adapters
-from .gemini import GeminiAdapter  # Google Gemini/Antigravity adapter
+from .gemini import GeminiAdapter  # Google Gemini/Cloud Code adapter
 from .openai import OpenAIAdapter  # OpenAI API adapter
 from .claude import ClaudeAdapter  # Anthropic Claude API adapter
 
@@ -123,7 +123,7 @@ def list_adapters() -> list[str]:
 
 # Register the built-in adapters automatically when this module is imported
 # These are the supported providers out of the box
-register("gemini", GeminiAdapter)  # Google Gemini / Antigravity
+register("gemini", GeminiAdapter)  # Google Gemini / Cloud Code
 register("openai", OpenAIAdapter)  # OpenAI Chat Completions API
 register("claude", ClaudeAdapter)  # Anthropic Claude Messages API
 

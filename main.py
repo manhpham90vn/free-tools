@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Free Antigravity - MITM Proxy for Antigravity Extension.
+Free Tools - MITM Proxy.
 
 This program acts as a Man-in-the-Middle proxy that intercepts
 Gemini API requests and forwards them to a configurable custom endpoint.
@@ -139,8 +139,8 @@ def ensure_root():
     # sudo may change HOME to /root and strip most env vars for security.
     # We must resolve all user-relative paths (~/) BEFORE calling sudo.
 
-    # Resolve ~/.free-antigravity to absolute path (e.g., /home/user/.free-antigravity)
-    cert_dir = str(Path("~/.free-antigravity").expanduser().resolve())
+    # Resolve ~/.free-tools to absolute path (e.g., /home/user/.free-tools)
+    cert_dir = str(Path("~/.free-tools").expanduser().resolve())
     # Resolve .env file path to absolute
     dotenv_path = str((_script_dir / ".env").resolve())
 
@@ -213,9 +213,7 @@ def _resolve_config(config: dict) -> dict:
     """
     # Prefer the pre-resolved cert_dir from env (set before sudo escalation)
     # Fall back to the value in config.yaml, then to the default
-    cert_dir = os.environ.get("_FA_CERT_DIR") or config.get(
-        "cert_dir", "~/.free-antigravity"
-    )
+    cert_dir = os.environ.get("_FA_CERT_DIR") or config.get("cert_dir", "~/.free-tools")
     # expanduser() resolves ~, resolve() makes it absolute
     config["cert_dir"] = str(Path(cert_dir).expanduser().resolve())
     return config
@@ -311,7 +309,7 @@ def cmd_install_ca(args):
         args: Parsed argparse namespace
     """
     config = load_config(args.config)
-    cert_dir = config.get("cert_dir", "~/.free-antigravity")
+    cert_dir = config.get("cert_dir", "~/.free-tools")
 
     # install_ca() handles both generation and trust store installation
     success = install_ca(cert_dir)
@@ -333,7 +331,7 @@ def cmd_trust_ca(args):
         args: Parsed argparse namespace (may include --force flag)
     """
     config = load_config(args.config)
-    cert_dir = config.get("cert_dir", "~/.free-antigravity")
+    cert_dir = config.get("cert_dir", "~/.free-tools")
 
     # force=True will reinstall even if already trusted
     success = trust_ca(cert_dir, force=args.force)
@@ -351,7 +349,7 @@ def cmd_untrust_ca(args):
         args: Parsed argparse namespace
     """
     config = load_config(args.config)
-    cert_dir = config.get("cert_dir", "~/.free-antigravity")
+    cert_dir = config.get("cert_dir", "~/.free-tools")
 
     success = untrust_ca(cert_dir)
     sys.exit(0 if success else 1)
@@ -369,7 +367,7 @@ def cmd_uninstall_ca(args):
         args: Parsed argparse namespace (may include --delete flag)
     """
     config = load_config(args.config)
-    cert_dir = config.get("cert_dir", "~/.free-antigravity")
+    cert_dir = config.get("cert_dir", "~/.free-tools")
 
     # delete_files=True will remove rootCA.crt and rootCA.key from disk
     success = uninstall_ca(cert_dir, delete_files=args.delete)
@@ -391,9 +389,9 @@ def cmd_status(args):
     """
     config = load_config(args.config)
     hosts = config.get("hosts", [])
-    cert_dir = config.get("cert_dir", "~/.free-antigravity")
+    cert_dir = config.get("cert_dir", "~/.free-tools")
 
-    print("=== Free Antigravity Status ===")
+    print("=== Free Tools Status ===")
     print()
 
     # Check DNS spoofing status by looking for our marker block in /etc/hosts
@@ -414,7 +412,9 @@ def cmd_status(args):
         print("[*] Root CA: Not found (run install-ca first)")
 
     print()
-    print(f"Target endpoint: {os.environ.get('ANTHROPIC_BASE_URL', 'Not set (check .env)')}")
+    print(
+        f"Target endpoint: {os.environ.get('ANTHROPIC_BASE_URL', 'Not set (check .env)')}"
+    )
     print(f"Model mappings: {len(config.get('model_mapping', {}))} configured")
 
 
@@ -441,7 +441,7 @@ def main():
     """
     # Create the top-level argument parser
     parser = argparse.ArgumentParser(
-        description="Free Antigravity - MITM Proxy for Antigravity Extension",
+        description="Free Tools - MITM Proxy",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 

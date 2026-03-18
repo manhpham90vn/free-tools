@@ -1,9 +1,9 @@
 """
-Gemini/Antigravity Adapter.
+Gemini/Cloud Code Adapter.
 
 This adapter handles conversion between Google's Gemini API format and the internal
 unified schema. The Gemini API is used by:
-- Google's Antigravity Cloud Code extension
+- Google's Cloud Code extension
 - Direct Gemini API calls
 
 Gemini uses a unique format with "contents" (messages), "systemInstruction",
@@ -48,7 +48,7 @@ class GeminiStreamState(StreamState):
 
 class GeminiAdapter(BaseAdapter):
     """
-    Adapter for Gemini/Antigravity API format.
+    Adapter for Gemini/Cloud Code API format.
 
     Handles conversion between:
     - Gemini format: contents[], systemInstruction, generationConfig, tools
@@ -63,11 +63,11 @@ class GeminiAdapter(BaseAdapter):
 
     def parse_request(self, body: bytes, model: str) -> InternalRequest:
         """
-        Parse Gemini/Antigravity request into InternalRequest.
+        Parse Gemini/Cloud Code request into InternalRequest.
 
         The Gemini API wraps requests in different ways depending on the client:
         - Direct Gemini API: {"contents": [...], "generationConfig": {...}}
-        - Antigravity/Cloud Code: {"request": {...}} wrapper
+        - Cloud Code: {"request": {...}} wrapper
 
         This method handles both formats and extracts:
         - System instruction
@@ -84,8 +84,8 @@ class GeminiAdapter(BaseAdapter):
         """
         raw = json.loads(body)
 
-        # === Handle Antigravity envelope format ===
-        # Antigravity wraps the real request in a "request" key
+        # === Handle Cloud Code envelope format ===
+        # Cloud Code wraps the real request in a "request" key
         inner = raw.get("request", raw)
         contents = inner.get("contents", [])
         system_instruction = inner.get("systemInstruction", {})
@@ -219,7 +219,7 @@ class GeminiAdapter(BaseAdapter):
 
     def format_request(self, req: InternalRequest) -> dict:
         """
-        Format InternalRequest into Gemini/Antigravity request format.
+        Format InternalRequest into Gemini/Cloud Code request format.
 
         This is typically used when Gemini is the TARGET provider
         (we're sending requests TO Gemini API).

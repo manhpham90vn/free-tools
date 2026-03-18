@@ -1,5 +1,5 @@
 # =============================================================================
-# Free Antigravity - MITM Proxy Configuration
+# Free Tools - MITM Proxy Configuration
 # =============================================================================
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -52,4 +52,4 @@ listen_port: 443
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Directory to store Root CA and generated certificates
-cert_dir: "~/.free-antigravity"
+cert_dir: "~/.free-tools"

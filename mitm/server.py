@@ -66,8 +66,8 @@ class MITMServer:
                 - hosts: List of hostnames to intercept
         """
         self.config = config
-        # Default cert directory is ~/.free-antigravity
-        self.cert_dir = config.get("cert_dir", "~/.free-antigravity")
+        # Default cert directory is ~/.free-tools
+        self.cert_dir = config.get("cert_dir", "~/.free-tools")
 
         # Load or generate the Root CA keypair
         # If Root CA files exist in cert_dir, load them

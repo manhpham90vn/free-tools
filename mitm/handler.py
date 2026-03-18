@@ -1,5 +1,5 @@
 """
-Request Interceptor for Antigravity MITM Proxy.
+Request Interceptor for Free Tools MITM Proxy.
 
 This module contains the core request handling logic:
 - Provider detection: Identifies whether the request is from Gemini, OpenAI, or Claude
@@ -34,7 +34,7 @@ from .utils import send_error_response  # Utility for sending error responses to
 # 1. Whether to intercept the request at all
 # 2. Which provider adapter to use for format conversion
 
-# Gemini/Antigravity patterns (Google's AI SDK)
+# Gemini/Cloud Code patterns (Google's AI SDK)
 # :generateContent = single request, :streamGenerateContent = streaming
 INTERCEPT_PATTERNS = [
     re.compile(r":generateContent"),  # Non-streaming Gemini API
@@ -81,7 +81,7 @@ def detect_provider(path: str, headers: Dict[str, str] | None = None) -> str:
     Detect the source provider from the request URL path.
 
     This determines which format the incoming request is using:
-    - "gemini": Google's Gemini API format (Antigravity)
+    - "gemini": Google's Gemini API format (Cloud Code)
     - "openai": OpenAI's Chat Completions format
     - "claude": Anthropic's Claude Messages API format
 
@@ -95,7 +95,7 @@ def detect_provider(path: str, headers: Dict[str, str] | None = None) -> str:
     Returns:
         Provider identifier string: "gemini", "openai", or "claude"
     """
-    # Check for Gemini/Antigravity endpoints first (most common use case)
+    # Check for Gemini/Cloud Code endpoints first (most common use case)
     if any(p.search(path) for p in INTERCEPT_PATTERNS):
         return "gemini"
 
@@ -108,7 +108,7 @@ def detect_provider(path: str, headers: Dict[str, str] | None = None) -> str:
         return "claude"
 
     # Default to Gemini if no pattern matches
-    # This is because Antigravity primarily targets Google's Gemini API
+    # This is because the proxy primarily targets Google's Gemini API
     return "gemini"
 
 
@@ -124,7 +124,7 @@ def extract_model_from_path(path: str, body: bytes | None = None) -> Optional[st
     Different API providers put the model name in different places:
     - Gemini: /v1/models/gemini-2.0-flash:generateContent (in URL path)
     - OpenAI: /v1/chat/completions (model in body as {"model": "gpt-4"})
-    - Antigravity: {"model": "...", "request": {...}} (wrapper format)
+    - Cloud Code: {"model": "...", "request": {...}} (wrapper format)
 
     This function tries each location until it finds a model name.
 
@@ -147,12 +147,12 @@ def extract_model_from_path(path: str, body: bytes | None = None) -> Optional[st
     if match:
         return match.group(1)
 
-    # Try parsing body for Antigravity/OpenAI format
+    # Try parsing body for Cloud Code/OpenAI format
     # The body might be JSON with {"model": "..."} or {"request": {"model": "..."}}
     if body:
         try:
             data = json.loads(body)
-            # Antigravity wrapper format: body.model or body.request.model
+            # Cloud Code wrapper format: body.model or body.request.model
             model = data.get("model") or data.get("request", {}).get("model")
             if model:
                 return model

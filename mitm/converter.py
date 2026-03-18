@@ -1,9 +1,9 @@
 """
-Request/Response converter: Antigravity (Gemini Cloud Code) ↔ Anthropic Messages API
+Request/Response converter: Gemini Cloud Code ↔ Anthropic Messages API
 
 Based on 9router's translation chain:
-  Request:  Antigravity envelope → Gemini → OpenAI → Claude
-  Response: Claude SSE → OpenAI chunks → Antigravity SSE
+  Request:  Gemini Cloud Code envelope → Gemini → OpenAI → Claude
+  Response: Claude SSE → OpenAI chunks → Gemini Cloud Code SSE
 
 Simplified here to direct conversion without OpenAI intermediate.
 """
@@ -15,7 +15,7 @@ from typing import Dict, Any, List, Optional
 
 
 # ---------------------------------------------------------------------------
-# REQUEST: Antigravity → Claude
+# REQUEST: Gemini Cloud Code → Claude
 # ---------------------------------------------------------------------------
 
 
@@ -25,7 +25,7 @@ def convert_request(
     config: Dict[str, Any],
 ) -> Dict[str, Any]:
     """
-    Convert Antigravity (Gemini Cloud Code envelope) request to
+    Convert Gemini Cloud Code envelope request to
     Anthropic Messages API format.
     """
     raw = json.loads(body)
@@ -220,7 +220,7 @@ def _convert_schema(schema: Any) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# RESPONSE: Claude SSE → Antigravity SSE
+# RESPONSE: Claude SSE → Gemini Cloud Code SSE
 # ---------------------------------------------------------------------------
 
 
@@ -249,7 +249,7 @@ def convert_claude_event(
     event_data: Dict[str, Any], state: StreamState
 ) -> Optional[str]:
     """
-    Convert a single Claude SSE event to Antigravity SSE line.
+    Convert a single Claude SSE event to Gemini Cloud Code SSE line.
 
     Returns SSE data line (without "data: " prefix) or None to skip.
     """
@@ -288,11 +288,11 @@ def convert_claude_event(
 
         if delta_type == "text_delta" and delta.get("text"):
             parts = [{"text": delta["text"]}]
-            return _build_antigravity_response(parts, state)
+            return _build_gemini_response(parts, state)
 
         elif delta_type == "thinking_delta" and delta.get("thinking"):
             parts = [{"thought": True, "text": delta["thinking"]}]
-            return _build_antigravity_response(parts, state)
+            return _build_gemini_response(parts, state)
 
         elif delta_type == "input_json_delta" and delta.get("partial_json"):
             if index in state.tool_call_accum:
@@ -353,7 +353,7 @@ def convert_claude_event(
             }
             finish_reason = reason_map.get(stop_reason, "STOP")
 
-            return _build_antigravity_response(
+            return _build_gemini_response(
                 parts,
                 state,
                 finish_reason=finish_reason,
@@ -366,13 +366,13 @@ def convert_claude_event(
     return None
 
 
-def _build_antigravity_response(
+def _build_gemini_response(
     parts: List[Dict],
     state: StreamState,
     finish_reason: Optional[str] = None,
     include_usage: bool = False,
 ) -> str:
-    """Build Antigravity SSE response JSON string."""
+    """Build Gemini Cloud Code SSE response JSON string."""
     candidate: Dict[str, Any] = {
         "content": {
             "role": "model",

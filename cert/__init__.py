@@ -1,5 +1,5 @@
 """
-Certificate Generation and Management Module for Antigravity MITM Proxy.
+Certificate Generation and Management Module for Free-Tools MITM Proxy.
 
 This module handles all SSL/TLS certificate operations:
 - Root CA generation: Creates a self-signed CA certificate and private key
@@ -93,8 +93,8 @@ def generate_root_ca(cert_dir: str) -> Tuple[rsa.RSAPrivateKey, x509.Certificate
     subject = issuer = x509.Name(
         [
             x509.NameAttribute(NameOID.COUNTRY_NAME, "US"),
-            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Free Antigravity"),
-            x509.NameAttribute(NameOID.COMMON_NAME, "Free Antigravity Root CA"),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Free Tools"),
+            x509.NameAttribute(NameOID.COMMON_NAME, "Free Tools Root CA"),
         ]
     )
 
@@ -325,7 +325,7 @@ def is_trusted(cert_dir: str) -> bool:
                     "security",
                     "find-certificate",
                     "-c",
-                    "Free Antigravity Root CA",
+                    "Free Tools Root CA",
                     "-p",
                 ],
                 capture_output=True,
@@ -512,7 +512,7 @@ def untrust_ca(cert_dir: str) -> bool:
                     "security",
                     "find-certificate",
                     "-c",
-                    "Free Antigravity Root CA",
+                    "Free Tools Root CA",
                     "-p",
                 ],
                 capture_output=True,
