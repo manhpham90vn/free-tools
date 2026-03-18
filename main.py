@@ -13,8 +13,16 @@ from pathlib import Path
 import yaml
 from dotenv import load_dotenv
 
-from hostsutil.hosts import add_hosts, remove_hosts, flush_dns_cache, is_enabled
-from mitm.cert import load_or_create_root_ca
+from hostsutil import add_hosts, remove_hosts, flush_dns_cache, is_enabled
+from cert import (
+    install_ca,
+    uninstall_ca,
+    trust_ca,
+    untrust_ca,
+    ca_exists,
+    is_trusted,
+    get_ca_cert_path,
+)
 from mitm.server import MITMServer
 
 # Load .env file if exists (use env override for sudo, else script directory)
@@ -157,71 +165,61 @@ def cmd_install_ca(args):
     config = load_config(args.config)
     cert_dir = config.get("cert_dir", "~/.free-antigravity")
 
-    # Ensure CA exists
-    ca_key, ca_cert = load_or_create_root_ca(cert_dir)
+    # Run install (generate + trust)
+    success = install_ca(cert_dir)
+    sys.exit(0 if success else 1)
 
-    cert_path = Path(cert_dir).expanduser() / "rootCA.crt"
 
-    print(f"[*] Root CA location: {cert_path}")
-    print()
+def cmd_trust_ca(args):
+    """Trust the Root CA in the system trust store."""
+    config = load_config(args.config)
+    cert_dir = config.get("cert_dir", "~/.free-antigravity")
 
-    # Detect OS and install accordingly
-    if sys.platform == "darwin":
-        # macOS
-        print("On macOS, you can install the CA with:")
-        print(
-            f"  sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain {cert_path}"
-        )
-        print()
-        print("Or use the GUI:")
-        print("  1. Open Keychain Access")
-        print(f"  2. Drag {cert_path} to System keychain")
-        print("  3. Double-click the certificate, expand Trust")
-        print("  4. Set 'Secure Sockets Layer (SSL)' to 'Always Trust'")
+    success = trust_ca(cert_dir, force=args.force)
+    sys.exit(0 if success else 1)
 
-    elif sys.platform.startswith("linux"):
-        # Linux - varies by distribution
-        print("On Linux, you have several options:")
-        print()
-        print("Option 1 - Debian/Ubuntu:")
-        print(f"  sudo cp {cert_path} /usr/local/share/ca-certificates/")
-        print("  sudo update-ca-certificates")
-        print()
-        print("Option 2 - Fedora/RHEL:")
-        print(f"  sudo cp {cert_path} /etc/pki/ca-trust/source/anchors/")
-        print("  sudo update-ca-trust")
-        print()
-        print("Option 3 - Chrome (per-user, no sudo needed):")
-        print("  1. Open chrome://settings/certificates")
-        print("  2. Click 'Authorities' -> 'Import'")
-        print(f"  3. Select {cert_path}")
-        print("  4. Check 'Trust this certificate for identifying websites'")
 
-    else:
-        print(f"Unknown platform: {sys.platform}")
-        print(f"Please install {cert_path} manually into your trust store.")
+def cmd_untrust_ca(args):
+    """Remove the Root CA from the system trust store."""
+    config = load_config(args.config)
+    cert_dir = config.get("cert_dir", "~/.free-antigravity")
 
-    print()
-    print("[*] After installation, restart your browser/application.")
+    success = untrust_ca(cert_dir)
+    sys.exit(0 if success else 1)
+
+
+def cmd_uninstall_ca(args):
+    """Uninstall the Root CA from the system and optionally delete files."""
+    config = load_config(args.config)
+    cert_dir = config.get("cert_dir", "~/.free-antigravity")
+
+    success = uninstall_ca(cert_dir, delete_files=args.delete)
+    sys.exit(0 if success else 1)
 
 
 def cmd_status(args):
     """Check the status of the MITM proxy."""
     config = load_config(args.config)
     hosts = config.get("hosts", [])
+    cert_dir = config.get("cert_dir", "~/.free-antigravity")
 
     print("=== Free Antigravity Status ===")
     print()
 
+    # DNS status
     if is_enabled(hosts):
         print("[*] DNS spoofing: ENABLED")
         print(f"    Redirecting: {', '.join(hosts)}")
     else:
         print("[*] DNS spoofing: DISABLED")
 
-    cert_dir = Path(config.get("cert_dir", "~/.free-antigravity")).expanduser()
-    if (cert_dir / "rootCA.crt").exists():
-        print(f"[*] Root CA: {cert_dir / 'rootCA.crt'}")
+    # CA status
+    print()
+    if ca_exists(cert_dir):
+        cert_path = get_ca_cert_path(cert_dir)
+        print(f"[*] Root CA: {cert_path}")
+        trusted = is_trusted(cert_dir)
+        print(f"[*] Trusted: {'Yes' if trusted else 'No'}")
     else:
         print("[*] Root CA: Not found (run install-ca first)")
 
@@ -263,9 +261,36 @@ def main():
     # install-ca command
     ca_parser = subparsers.add_parser(
         "install-ca",
-        help="Install Root CA into system trust store",
+        help="Generate and install Root CA into system trust store",
     )
     ca_parser.set_defaults(func=cmd_install_ca)
+
+    # trust-ca command
+    trust_parser = subparsers.add_parser(
+        "trust-ca",
+        help="Trust the Root CA in the system trust store",
+    )
+    trust_parser.add_argument(
+        "--force", action="store_true", help="Reinstall even if already trusted"
+    )
+    trust_parser.set_defaults(func=cmd_trust_ca)
+
+    # untrust-ca command
+    untrust_parser = subparsers.add_parser(
+        "untrust-ca",
+        help="Remove the Root CA from the system trust store",
+    )
+    untrust_parser.set_defaults(func=cmd_untrust_ca)
+
+    # uninstall-ca command
+    uninstall_parser = subparsers.add_parser(
+        "uninstall-ca",
+        help="Uninstall Root CA from trust store and optionally delete files",
+    )
+    uninstall_parser.add_argument(
+        "--delete", action="store_true", help="Also delete CA certificate files"
+    )
+    uninstall_parser.set_defaults(func=cmd_uninstall_ca)
 
     # status command
     status_parser = subparsers.add_parser(

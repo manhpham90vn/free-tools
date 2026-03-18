@@ -9,7 +9,7 @@ import tempfile
 import os
 from typing import Dict, Any
 
-from . import cert
+import cert
 from .handler import should_intercept, forward_to_target, forward_to_target_streaming
 from .passthrough import passthrough
 
