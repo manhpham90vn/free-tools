@@ -17,7 +17,14 @@ if [ ! -d ".venv" ]; then
   fi
 fi
 
+echo "Compiling..."
 ./.venv/bin/python -m compileall . -q
+
+echo "Formatting..."
 ./.venv/bin/ruff format . --check
+
+echo "Linting..."
 ./.venv/bin/ruff check .
+
+echo "Type checking..."
 ./.venv/bin/mypy .

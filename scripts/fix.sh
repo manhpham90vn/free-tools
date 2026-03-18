@@ -17,5 +17,8 @@ if [ ! -d ".venv" ]; then
   fi
 fi
 
+echo "Formatting..."
 ./.venv/bin/ruff format .
+
+echo "Linting..."
 ./.venv/bin/ruff check . --fix
