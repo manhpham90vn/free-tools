@@ -24,12 +24,16 @@ from typing import Dict, Any  # Type hints for configuration dictionary
 
 # === Internal module imports ===
 import cert  # Certificate generation (Root CA, leaf certificates)
+from logger import get_logger  # Structured logging
 from .handler import (
     should_intercept,  # Determines if a request should be intercepted
     forward_to_target,  # Forwards non-streaming requests to target
     forward_to_target_streaming,  # Forwards streaming requests to target
 )
 from .passthrough import passthrough  # Forwards non-intercepted requests to real server
+
+# Module-level logger
+log = get_logger("mitm.server")
 
 
 class MITMServer:
@@ -181,7 +185,7 @@ class MITMServer:
                 # Replace the SSL context with one containing the correct certificate
                 ssl_object.context = self.get_ssl_context(hostname)
         except Exception as e:
-            print(f"[ERROR] SNI callback error: {e}")
+            log.error("SNI callback error: {e}", e=e)
 
     async def handle_client(
         self,
@@ -203,7 +207,7 @@ class MITMServer:
         """
         # Get client address for logging
         peername = writer.get_extra_info("peername")
-        print(f"\n[CONN] New connection from {peername}")
+        log.debug("New connection from {peername}", peername=peername)
 
         try:
             # === Step 1: Extract hostname from TLS SNI ===
@@ -217,24 +221,24 @@ class MITMServer:
                     if sni:
                         # Convert bytes to str if necessary
                         hostname = sni if isinstance(sni, str) else sni.decode()
-                        print(f"[SNI] hostname={hostname}")
+                        log.sni("hostname={hostname}", hostname=hostname)
                 except Exception as e:
-                    print(f"[SNI] Error getting hostname: {e}")
+                    log.sni("Error getting hostname: {e}", e=e)
 
             # Fallback: if no SNI, use the first configured host as default
             if not hostname:
                 hostname = self.config.get("hosts", ["unknown"])[0]
-                print(f"[SNI] No hostname, fallback to {hostname}")
+                log.sni("No hostname, fallback to {hostname}", hostname=hostname)
 
             # === Step 2: Read HTTP request ===
             data = await reader.read(65536)  # Read up to 64KB
             if not data:
                 # Client sent empty request, close connection
-                print("[CONN] Empty read, closing")
+                log.debug("Empty read, closing")
                 writer.close()
                 return
 
-            print(f"[RECV] {len(data)} bytes")
+            log.req("{n} bytes received", n=len(data))
 
             # === Step 3: Parse request line ===
             try:
@@ -242,12 +246,18 @@ class MITMServer:
                 # Split by \r\n first line is the request line
                 request_line = data.decode(errors="replace").split("\r\n")[0]
                 method, path, _ = request_line.split(" ")
-                print(f"[REQ] {method} {hostname}{path}")
+                log.req(
+                    "{method} {hostname}{path}",
+                    method=method,
+                    hostname=hostname,
+                    path=path,
+                )
             except (ValueError, UnicodeDecodeError) as e:
                 # Failed to parse request line - malformed request
-                print(f"[ERROR] Failed to parse request line: {e}")
-                print(
-                    f"[ERROR] Raw data (first 200): {data[:200].decode(errors='replace')}"
+                log.error("Failed to parse request line: {e}", e=e)
+                log.debug(
+                    "Raw data (first 200): {data}",
+                    data=data[:200].decode(errors="replace"),
                 )
                 writer.write(b"HTTP/1.1 400 Bad Request\r\n\r\n")
                 await writer.drain()
@@ -339,14 +349,14 @@ class MITMServer:
                             break  # No more \r\n in buffer, EOF
 
                         body = bytes(decoded)
-                        print(f"[CHUNKED] Reassembled body: {len(body)} bytes")
+                        log.req("Reassembled chunked body: {n} bytes", n=len(body))
 
                     # === Handle Content-Length (regular body) ===
                     elif content_length > 0:
                         # Read remaining body bytes to match Content-Length
                         remaining = content_length - len(body)
                         if remaining > 0:
-                            print(f"[RECV] Reading remaining {remaining} body bytes...")
+                            log.req("Reading remaining {n} body bytes...", n=remaining)
                         while remaining > 0:
                             chunk = await reader.read(min(remaining, 65536))
                             if not chunk:
@@ -355,8 +365,10 @@ class MITMServer:
                             remaining -= len(chunk)
 
                     # Log parsed headers and body size
-                    print(f"[REQ] Headers: {dict(list(headers.items())[:5])}...")
-                    print(f"[REQ] Body size: {len(body)} bytes")
+                    log.req(
+                        "Headers: {headers}...", headers=dict(list(headers.items())[:5])
+                    )
+                    log.req("Body size: {n} bytes", n=len(body))
                 else:
                     # No body (no \r\n\r\n found)
                     body = b""
@@ -364,7 +376,7 @@ class MITMServer:
             except Exception as e:
                 import traceback
 
-                print(f"[ERROR] Failed to parse headers: {e}")
+                log.error("Failed to parse headers: {e}", e=e)
                 traceback.print_exc()
                 writer.write(b"HTTP/1.1 400 Bad Request\r\n\r\n")
                 await writer.drain()
@@ -374,7 +386,12 @@ class MITMServer:
             # === Step 5: Decide to intercept or passthrough ===
             # Check if this request should be intercepted (LLM API call)
             if should_intercept(path):
-                print(f"[INTERCEPT] {method} {hostname}{path}")
+                log.intercept(
+                    "{method} {hostname}{path}",
+                    method=method,
+                    hostname=hostname,
+                    path=path,
+                )
 
                 # Handle streaming vs non-streaming requests differently
                 # Streaming uses SSE (Server-Sent Events) for real-time response
@@ -389,7 +406,11 @@ class MITMServer:
                         method, path, headers, body, self.config
                     )
 
-                    print(f"[RESP] Status: {status}, Body: {len(resp_body)} bytes")
+                    log.resp(
+                        "Status: {status}, Body: {n} bytes",
+                        status=status,
+                        n=len(resp_body),
+                    )
 
                     # === Send HTTP response to client ===
                     status_line = f"HTTP/1.1 {status} OK\r\n"
@@ -409,13 +430,18 @@ class MITMServer:
                     writer.close()
             else:
                 # Not an intercepted endpoint - passthrough to real server
-                print(f"[PASSTHROUGH] {method} {hostname}{path}")
+                log.passthrough(
+                    "{method} {hostname}{path}",
+                    method=method,
+                    hostname=hostname,
+                    path=path,
+                )
                 await passthrough(method, path, headers, body, hostname, writer)
 
         except Exception as e:
             import traceback
 
-            print(f"[ERROR] Handler error: {e}")
+            log.error("Handler error: {e}", e=e)
             traceback.print_exc()
             try:
                 writer.write(b"HTTP/1.1 500 Internal Server Error\r\n\r\n")
@@ -458,15 +484,19 @@ class MITMServer:
             )
         except OSError as e:
             if e.errno == 98:  # Address already in use (EADDRINUSE)
-                print(f"Error: Port {port} is already in use.")
-                print("Please kill the existing process first:")
-                print(f"  sudo fuser -k {port}/tcp")
+                log.error("Port {port} is already in use.", port=port)
+                log.error("Please kill the existing process first:")
+                log.error("  sudo fuser -k {port}/tcp", port=port)
                 raise SystemExit(1)
             raise  # Re-raise other OS errors
 
-        print(f"[*] MITM Server listening on https://{host}:{port}")
-        print(f"[*] Intercepting: {', '.join(self.config.get('hosts', []))}")
-        print("[*] Press Ctrl+C to stop")
+        log.banner(
+            "MITM Server listening on https://{host}:{port}", host=host, port=port
+        )
+        log.banner(
+            "Intercepting: {hosts}", hosts=", ".join(self.config.get("hosts", []))
+        )
+        log.banner("Press Ctrl+C to stop")
 
         # Keep the server running forever
         # The async with block ensures proper cleanup on exit

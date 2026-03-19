@@ -25,7 +25,11 @@ import aiohttp  # Async HTTP client for forwarding requests
 import dns.resolver  # DNS resolution using custom nameservers (bypasses /etc/hosts)
 
 # === Internal module imports ===
+from logger import get_logger  # Structured logging
 from .utils import send_error_response  # Utility for sending error responses
+
+# Module-level logger
+log = get_logger("mitm.passthrough")
 
 
 # =============================================================================
@@ -123,15 +127,24 @@ async def passthrough(
     """
     # Anti-loop check: drop requests that came from our own proxy
     if is_loop_request(headers):
-        print(f"[LOOP DETECTED] Request from self, dropping: {hostname}{path}")
+        log.loop(
+            "Request from self, dropping: {hostname}{path}",
+            hostname=hostname,
+            path=path,
+        )
         return
 
     # Resolve the real IP address using Google DNS
     try:
         real_ip = resolve_real_ip(hostname)
-        print(f"[PASSTHROUGH] {hostname} -> {real_ip}{path}")
+        log.passthrough(
+            "{hostname} -> {real_ip}{path}",
+            hostname=hostname,
+            real_ip=real_ip,
+            path=path,
+        )
     except Exception as e:
-        print(f"[ERROR] Failed to resolve {hostname}: {e}")
+        log.error("Failed to resolve {hostname}: {e}", hostname=hostname, e=e)
         await send_error_response(writer, 502, "Bad Gateway", "DNS resolution failed")
         return
 
@@ -179,7 +192,11 @@ async def passthrough(
                 skip_auto_headers=["Host"],  # Don't override our Host header
                 allow_redirects=False,  # Don't follow redirects (let client handle them)
             ) as resp:
-                print(f"[PASSTHROUGH] Response: {resp.status} {resp.reason}")
+                log.passthrough(
+                    "Response: {status} {reason}",
+                    status=resp.status,
+                    reason=resp.reason,
+                )
 
                 # Forward the HTTP status line
                 status_line = f"HTTP/1.1 {resp.status} {resp.reason}\r\n"
@@ -221,18 +238,19 @@ async def passthrough(
 
                         body_str = resp_body.decode(errors="replace")
                         parsed = json.loads(body_str)
-                        print(
-                            f"[PASSTHROUGH] Body: {json.dumps(parsed, indent=2)[:10]}"
+                        log.passthrough(
+                            "Body: {body}", body=json.dumps(parsed, indent=2)[:10]
                         )
                     except Exception:
-                        print(
-                            f"[PASSTHROUGH] Body (raw): {resp_body[:10].decode(errors='replace')}"
+                        log.passthrough(
+                            "Body (raw): {body}",
+                            body=resp_body[:10].decode(errors="replace"),
                         )
 
-                print(f"[PASSTHROUGH] Forwarded {len(resp_body)} bytes")
+                log.passthrough("Forwarded {n} bytes", n=len(resp_body))
 
     except aiohttp.ClientError as e:
-        print(f"[ERROR] Passthrough failed: {e}")
+        log.error("Passthrough failed: {e}", e=e)
         await send_error_response(writer, 502, "Bad Gateway", str(e))
     finally:
         try:

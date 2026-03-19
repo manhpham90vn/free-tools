@@ -24,6 +24,8 @@ import yaml  # YAML parser for reading config.yaml
 from dotenv import load_dotenv  # Load environment variables from .env file
 
 # === Internal module imports ===
+from logger import setup_logging, get_logger, LogLevel  # Structured logging
+
 # hostsutil: Manages DNS spoofing by modifying /etc/hosts
 # Redirects target hostnames (e.g., cloudcode-pa.googleapis.com) to 127.0.0.1
 from hostsutil import add_hosts, remove_hosts, flush_dns_cache, is_enabled
@@ -44,6 +46,9 @@ from cert import (
 # mitm/server: The core MITM HTTPS server that handles TLS interception,
 # request parsing, provider detection, and response streaming
 from mitm.server import MITMServer
+
+# Module-level logger
+log = get_logger("main")
 
 
 # =============================================================================
@@ -133,7 +138,7 @@ def ensure_root():
         print("Error: Failed to obtain root privileges.")
         sys.exit(1)
 
-    print("[*] Requesting root privileges via sudo...")
+    log.banner("Requesting root privileges via sudo...")
 
     # === Pre-sudo path resolution ===
     # sudo may change HOME to /root and strip most env vars for security.
@@ -248,18 +253,20 @@ def cmd_start(args):
     # Port to listen on (443 = standard HTTPS, requires root)
     port = config.get("listen_port", 443)
 
-    print(f"[*] Cert dir: {config['cert_dir']}")
-    print(
-        f"[*] Target: {config.get('target_endpoint') or os.environ.get('ANTHROPIC_BASE_URL', 'NOT SET')}"
+    log.info("Cert dir: {cert_dir}", cert_dir=config["cert_dir"])
+    log.info(
+        "Target: {target}",
+        target=config.get("target_endpoint")
+        or os.environ.get("ANTHROPIC_BASE_URL", "NOT SET"),
     )
 
     # Add entries to /etc/hosts: "127.0.0.1 <hostname>" for each intercepted host
-    print("[*] Enabling DNS spoofing...")
+    log.banner("Enabling DNS spoofing...")
     add_hosts(hosts)
     flush_dns_cache()
 
     # Create and start the MITM server (handles TLS, request parsing, forwarding)
-    print(f"[*] Starting MITM server on port {port}...")
+    log.banner("Starting MITM server on port {port}...", port=port)
     server = MITMServer(config)
 
     try:
@@ -267,13 +274,13 @@ def cmd_start(args):
         asyncio.run(server.start(port=port))
     except KeyboardInterrupt:
         # User pressed Ctrl+C → graceful shutdown
-        print("\n[*] Shutting down...")
+        log.banner("Shutting down...")
     finally:
         # Always clean up DNS entries, even if an error occurred
-        print("[*] Disabling DNS spoofing...")
+        log.banner("Disabling DNS spoofing...")
         remove_hosts(hosts)
         flush_dns_cache()
-        print("[*] Stopped.")
+        log.banner("Stopped.")
 
 
 def cmd_stop(args):
@@ -291,10 +298,10 @@ def cmd_stop(args):
 
     hosts = config.get("hosts", [])
 
-    print("[*] Disabling DNS spoofing...")
+    log.banner("Disabling DNS spoofing...")
     remove_hosts(hosts)
     flush_dns_cache()
-    print("[*] Stopped.")
+    log.banner("Stopped.")
 
 
 def cmd_install_ca(args):
@@ -396,20 +403,20 @@ def cmd_status(args):
 
     # Check DNS spoofing status by looking for our marker block in /etc/hosts
     if is_enabled(hosts):
-        print("[*] DNS spoofing: ENABLED")
+        log.success("DNS spoofing: ENABLED")
         print(f"    Redirecting: {', '.join(hosts)}")
     else:
-        print("[*] DNS spoofing: DISABLED")
+        log.warning("DNS spoofing: DISABLED")
 
     # Check Root CA certificate status
     print()
     if ca_exists(cert_dir):
         cert_path = get_ca_cert_path(cert_dir)
-        print(f"[*] Root CA: {cert_path}")
+        log.info("Root CA: {cert_path}", cert_path=cert_path)
         trusted = is_trusted(cert_dir)
-        print(f"[*] Trusted: {'Yes' if trusted else 'No'}")
+        log.info("Trusted: {trusted}", trusted="Yes" if trusted else "No")
     else:
-        print("[*] Root CA: Not found (run install-ca first)")
+        log.warning("Root CA: Not found (run install-ca first)")
 
     print()
     print(
@@ -513,6 +520,9 @@ def main():
 
     # Parse the command-line arguments
     args = parser.parse_args()
+
+    # Initialize logging subsystem
+    setup_logging(level=LogLevel.DEBUG)
 
     # If no subcommand was given, print help and exit
     if not args.command:

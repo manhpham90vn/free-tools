@@ -24,6 +24,9 @@ import subprocess  # For running system commands (security, update-ca-certificat
 from pathlib import Path  # For filesystem paths
 from typing import Tuple, Dict, Any  # Type hints
 
+# === Internal module imports ===
+from logger import get_logger  # Structured logging
+
 # === Third-party imports (cryptography) ===
 from cryptography import x509  # X.509 certificate handling
 from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID  # Certificate fields
@@ -39,6 +42,9 @@ from cryptography.hazmat.primitives.asymmetric import rsa  # RSA key generation
 # Generating RSA keys is expensive, so we cache certificates by domain.
 # Key: domain name (str), Value: (cert_pem_bytes, key_pem_bytes)
 _leaf_cache: Dict[str, Tuple[bytes, bytes]] = {}
+
+# Module-level logger
+log = get_logger("cert")
 
 
 # =============================================================================
@@ -146,7 +152,7 @@ def generate_root_ca(cert_dir: str) -> Tuple[rsa.RSAPrivateKey, x509.Certificate
     # Write certificate in PEM format
     cert_path.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
 
-    print(f"Root CA generated: {cert_path}")
+    log.info("Root CA generated: {cert_path}", cert_path=cert_path)
     return key, cert
 
 
@@ -173,7 +179,7 @@ def load_or_create_root_ca(cert_dir: str) -> Tuple[Any, x509.Certificate]:
         # Load existing key and certificate
         key = serialization.load_pem_private_key(key_path.read_bytes(), password=None)
         cert = x509.load_pem_x509_certificate(cert_path.read_bytes())
-        print(f"Root CA loaded from {cert_path}")
+        log.info("Root CA loaded from {cert_path}", cert_path=cert_path)
         return key, cert
 
     # Generate new CA if not found
@@ -394,11 +400,11 @@ def trust_ca(cert_dir: str, force: bool = False) -> bool:
         True if successful, False otherwise
     """
     if not ca_exists(cert_dir):
-        print("Error: Root CA does not exist. Run generate_root_ca first.")
+        log.error("Root CA does not exist. Run generate_root_ca first.")
         return False
 
     if is_trusted(cert_dir) and not force:
-        print("[*] Root CA is already trusted.")
+        log.info("Root CA is already trusted.")
         return True
 
     cert_path = get_ca_cert_path(cert_dir)
@@ -407,7 +413,7 @@ def trust_ca(cert_dir: str, force: bool = False) -> bool:
     try:
         # === macOS ===
         if system == "Darwin":
-            print("[*] Installing Root CA to macOS System keychain...")
+            log.banner("Installing Root CA to macOS System keychain...")
             # Add to System keychain with trust settings
             subprocess.run(
                 [
@@ -422,11 +428,11 @@ def trust_ca(cert_dir: str, force: bool = False) -> bool:
                 ],
                 check=True,
             )
-            print("[+] Root CA trusted on macOS.")
+            log.success("Root CA trusted on macOS.")
 
         # === Linux ===
         elif system == "Linux":
-            print("[*] Installing Root CA to Linux trust store...")
+            log.banner("Installing Root CA to Linux trust store...")
 
             # Detect distribution and install accordingly
 
@@ -437,7 +443,7 @@ def trust_ca(cert_dir: str, force: bool = False) -> bool:
                 subprocess.run(["cp", str(cert_path), dest_dir], check=True)
                 # Update system CA certificates
                 subprocess.run(["update-ca-certificates"], check=True)
-                print(f"[+] Root CA installed to {dest_dir}/")
+                log.success("Root CA installed to {dest_dir}/", dest_dir=dest_dir)
 
             # Fedora/RHEL
             elif (
@@ -447,42 +453,42 @@ def trust_ca(cert_dir: str, force: bool = False) -> bool:
                 dest_dir = "/etc/pki/ca-trust/source/anchors"
                 subprocess.run(["cp", str(cert_path), dest_dir], check=True)
                 subprocess.run(["update-ca-trust"], check=True)
-                print(f"[+] Root CA installed to {dest_dir}/")
+                log.success("Root CA installed to {dest_dir}/", dest_dir=dest_dir)
 
             # Arch Linux
             elif Path("/etc/arch-release").exists():
                 dest_dir = "/etc/ca-certificates/trust-source/anchors"
                 subprocess.run(["cp", str(cert_path), dest_dir], check=True)
                 subprocess.run(["trust", "extract-compat"], check=True)
-                print(f"[+] Root CA installed to {dest_dir}/")
+                log.success("Root CA installed to {dest_dir}/", dest_dir=dest_dir)
 
             else:
                 # Generic Linux fallback
-                print("[!] Unknown Linux distribution. Attempting generic install...")
+                log.warning("Unknown Linux distribution. Attempting generic install...")
                 dest_dir = "/usr/local/share/ca-certificates"
                 if Path(dest_dir).exists():
                     subprocess.run(["cp", str(cert_path), dest_dir], check=True)
                     subprocess.run(["update-ca-certificates"], check=True)
-                    print(f"[+] Root CA installed to {dest_dir}/")
+                    log.success("Root CA installed to {dest_dir}/", dest_dir=dest_dir)
                 else:
-                    print("Error: Cannot find CA certificate directory.")
+                    log.error("Cannot find CA certificate directory.")
                     return False
 
         else:
-            print(f"Error: Unsupported platform: {system}")
+            log.error("Unsupported platform: {system}", system=system)
             return False
 
-        print("[*] Please restart your browser/application to pick up the new CA.")
+        log.info("Please restart your browser/application to pick up the new CA.")
         return True
 
     except subprocess.CalledProcessError as e:
-        print(f"Error: Command failed with return code {e.returncode}")
+        log.error("Command failed with return code {rc}", rc=e.returncode)
         return False
     except PermissionError:
-        print("Error: Root privileges required. Run with sudo.")
+        log.error("Root privileges required. Run with sudo.")
         return False
     except Exception as e:
-        print(f"Error: {e}")
+        log.error("{e}", e=e)
         return False
 
 
@@ -505,7 +511,7 @@ def untrust_ca(cert_dir: str) -> bool:
     try:
         # === macOS ===
         if system == "Darwin":
-            print("[*] Removing Root CA from macOS keychain...")
+            log.banner("Removing Root CA from macOS keychain...")
             # Find and remove the certificate
             result = subprocess.run(
                 [
@@ -525,13 +531,13 @@ def untrust_ca(cert_dir: str) -> bool:
                     ["security", "remove-trusted-cert", "-d", str(cert_path)],
                     check=True,
                 )
-                print("[+] Root CA removed from macOS keychain.")
+                log.success("Root CA removed from macOS keychain.")
             else:
-                print("[*] Root CA not found in keychain.")
+                log.info("Root CA not found in keychain.")
 
         # === Linux ===
         elif system == "Linux":
-            print("[*] Removing Root CA from Linux trust store...")
+            log.banner("Removing Root CA from Linux trust store...")
 
             # Debian/Ubuntu
             if Path("/etc/debian_version").exists():
@@ -540,7 +546,7 @@ def untrust_ca(cert_dir: str) -> bool:
                 if Path(src).exists():
                     Path(src).unlink()
                     subprocess.run(["update-ca-certificates"], check=True)
-                    print(f"[+] Removed {src}")
+                    log.success("Removed {src}", src=src)
 
             # Fedora/RHEL
             elif (
@@ -552,7 +558,7 @@ def untrust_ca(cert_dir: str) -> bool:
                 if Path(src).exists():
                     Path(src).unlink()
                     subprocess.run(["update-ca-trust"], check=True)
-                    print(f"[+] Removed {src}")
+                    log.success("Removed {src}", src=src)
 
             # Arch Linux
             elif Path("/etc/arch-release").exists():
@@ -561,26 +567,26 @@ def untrust_ca(cert_dir: str) -> bool:
                 if Path(src).exists():
                     Path(src).unlink()
                     subprocess.run(["trust", "extract-compat"], check=True)
-                    print(f"[+] Removed {src}")
+                    log.success("Removed {src}", src=src)
 
             else:
-                print("[!] Unknown Linux distribution. Please remove manually.")
+                log.warning("Unknown Linux distribution. Please remove manually.")
 
         else:
-            print(f"Error: Unsupported platform: {system}")
+            log.error("Unsupported platform: {system}", system=system)
             return False
 
-        print("[*] Please restart your browser/application.")
+        log.info("Please restart your browser/application.")
         return True
 
     except subprocess.CalledProcessError as e:
-        print(f"Error: Command failed with return code {e.returncode}")
+        log.error("Command failed with return code {rc}", rc=e.returncode)
         return False
     except PermissionError:
-        print("Error: Root privileges required. Run with sudo.")
+        log.error("Root privileges required. Run with sudo.")
         return False
     except Exception as e:
-        print(f"Error: {e}")
+        log.error("{e}", e=e)
         return False
 
 
@@ -601,7 +607,7 @@ def install_ca(cert_dir: str) -> bool:
     Returns:
         True if successful, False otherwise
     """
-    print("[*] Setting up Root CA...")
+    log.banner("Setting up Root CA...")
 
     # Ensure CA exists (generate if not)
     load_or_create_root_ca(cert_dir)
@@ -621,7 +627,7 @@ def uninstall_ca(cert_dir: str, delete_files: bool = False) -> bool:
     Returns:
         True if successful, False otherwise
     """
-    print("[*] Uninstalling Root CA...")
+    log.banner("Uninstalling Root CA...")
 
     # Remove from trust store
     untrust_ca(cert_dir)
@@ -633,12 +639,12 @@ def uninstall_ca(cert_dir: str, delete_files: bool = False) -> bool:
 
         if cert_path.exists():
             cert_path.unlink()
-            print(f"[*] Deleted {cert_path}")
+            log.success("Deleted {cert_path}", cert_path=cert_path)
 
         if key_path.exists():
             key_path.unlink()
-            print(f"[*] Deleted {key_path}")
+            log.success("Deleted {key_path}", key_path=key_path)
 
-        print("[*] Root CA files deleted.")
+        log.success("Root CA files deleted.")
 
     return True

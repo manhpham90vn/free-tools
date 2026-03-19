@@ -22,7 +22,11 @@ from typing import Optional, Dict, Any  # Type hints
 import aiohttp  # Async HTTP client for forwarding requests to target LLM
 
 # === Internal module imports ===
+from logger import get_logger  # Structured logging
 from .utils import send_error_response  # Utility for sending error responses to clients
+
+# Module-level logger
+log = get_logger("mitm.handler")
 
 
 # =============================================================================
@@ -261,8 +265,12 @@ async def forward_to_target(
     )
 
     # Log the conversion for debugging
-    print(
-        f"[INTERCEPT] {original_model or 'unknown'} -> {target_model} ({source_provider} -> {target_provider_name})"
+    log.intercept(
+        "{original} -> {target} ({source} -> {target_provider})",
+        original=original_model or "unknown",
+        target=target_model,
+        source=source_provider,
+        target_provider=target_provider_name,
     )
 
     # Step 6: Parse source request to internal format
@@ -377,8 +385,12 @@ async def forward_to_target_streaming(
         else default_model
     )
 
-    print(
-        f"[STREAM] {original_model or 'unknown'} -> {target_model} ({source_provider} -> {target_provider_name})"
+    log.stream(
+        "{original} -> {target} ({source} -> {target_provider})",
+        original=original_model or "unknown",
+        target=target_model,
+        source=source_provider,
+        target_provider=target_provider_name,
     )
 
     # Parse and convert request
@@ -386,7 +398,7 @@ async def forward_to_target_streaming(
         internal_req = source_adapter.parse_request(body, target_model)
         internal_req.model = target_model
     except (json.JSONDecodeError, Exception) as e:
-        print(f"[ERROR] Convert request failed: {e}")
+        log.error("Convert request failed: {e}", e=e)
         import traceback
 
         traceback.print_exc()
@@ -396,9 +408,9 @@ async def forward_to_target_streaming(
     # Format for target provider
     target_req = target_adapter.format_request(internal_req)
 
-    print(f"[STREAM] Target: {target_url}")
-    print(f"[STREAM] Model: {target_req.get('model')}")
-    print(f"[STREAM] Messages: {len(target_req.get('messages', []))}")
+    log.stream("Target: {target_url}", target_url=target_url)
+    log.stream("Model: {model}", model=target_req.get("model"))
+    log.stream("Messages: {n}", n=len(target_req.get("messages", [])))
 
     # Special handling for Claude streaming (uses Anthropic SDK)
     if target_provider_name == "claude":
@@ -489,9 +501,9 @@ async def _stream_claude(
             stream_kwargs["temperature"] = target_req["temperature"]
 
         # Start streaming from Claude
-        print(f"[STREAM] Connecting to {target_url}...")
+        log.stream("Connecting to {target_url}...", target_url=target_url)
         async with client.messages.stream(**stream_kwargs) as stream:
-            print("[STREAM] Connected, sending response headers...")
+            log.stream("Connected, sending response headers...")
 
             # Send HTTP response headers for SSE
             status_line = "HTTP/1.1 200 OK\r\n"
@@ -517,7 +529,7 @@ async def _stream_claude(
 
                 # Log first few events for debugging
                 if event_count <= 3:
-                    print(f"[STREAM] Event #{event_count}: {event_type}")
+                    log.stream("Event #{n}: {t}", n=event_count, t=event_type)
 
                 # Convert Claude event to dict format for the adapter
                 event_dict: dict[str, Any] = {"type": event_type}
@@ -553,11 +565,11 @@ async def _stream_claude(
                         writer.write(f"data: {result}\r\n\r\n".encode())
                         await writer.drain()
                     except Exception as write_err:
-                        print(f"[STREAM] Write error: {write_err}")
+                        log.warning("Stream write error: {e}", e=write_err)
                         break
 
             # Send empty data to signal end of stream
-            print(f"[STREAM] Done, processed {event_count} events")
+            log.stream("Done, processed {n} events", n=event_count)
             try:
                 writer.write(b"data: \r\n\r\n")
                 await writer.drain()
@@ -565,7 +577,7 @@ async def _stream_claude(
                 pass
 
     except Exception as e:
-        print(f"[ERROR] Streaming failed: {e}")
+        log.error("Streaming failed: {e}", e=e)
         import traceback
 
         traceback.print_exc()
@@ -787,7 +799,7 @@ async def _stream_generic(
                             writer.write(f"data: {result}\r\n\r\n".encode())
                             await writer.drain()
                         except Exception as write_err:
-                            print(f"[STREAM] Write error: {write_err}")
+                            log.warning("Stream write error: {e}", e=write_err)
                             break
 
                 # Signal end of stream
@@ -798,7 +810,7 @@ async def _stream_generic(
                     pass
 
     except Exception as e:
-        print(f"[ERROR] Generic streaming failed: {e}")
+        log.error("Generic streaming failed: {e}", e=e)
         import traceback
 
         traceback.print_exc()

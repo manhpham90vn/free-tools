@@ -10,7 +10,7 @@
 target_provider: claude
 
 # Default model when no mapping is found
-default_model: "claude-sonnet-4-6"
+default_model: "claude-opus-4-6"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # MODEL MAPPING
@@ -18,21 +18,22 @@ default_model: "claude-sonnet-4-6"
 # Format: "source_model": "target_model"
 # ─────────────────────────────────────────────────────────────────────────────
 model_mapping:
-  # Gemini models → Claude
-  gemini-2.5-pro: claude-opus-4-6
-  gemini-2.5-flash-thinking: claude-sonnet-4-6
-  gemini-2.5-flash: claude-sonnet-4-6
-  gemini-2.5-flash-lite: claude-sonnet-4-6
-  gemini-2.0-flash: claude-sonnet-4-6
-
-  # Claude models → Claude
   claude-opus-4-6-thinking: claude-opus-4-6
-  claude-sonnet-4-6: claude-sonnet-4-6
-
-  # OpenAI models → Claude
-  gpt-4o: claude-sonnet-4-6
-  gpt-4o-mini: claude-sonnet-4-6
-
+  claude-sonnet-4-6: claude-opus-4-6
+  gemini-3.1-pro-high: claude-opus-4-6
+  gemini-3.1-pro-low: claude-opus-4-6
+  gemini-3.1-flash-image: claude-opus-4-6
+  gemini-3-pro-high: claude-opus-4-6
+  gemini-3-pro-low: claude-opus-4-6
+  gemini-3-pro-image: claude-opus-4-6
+  gemini-3-flash: claude-opus-4-6
+  gemini-3-flash-agent: claude-opus-4-6
+  gemini-2.5-pro: claude-opus-4-6
+  gemini-2.5-flash-thinking: claude-opus-4-6
+  gemini-2.5-flash: claude-opus-4-6
+  gemini-2.5-flash-lite: claude-opus-4-6
+  gpt-oss-120b-medium: claude-opus-4-6
+  
 # ─────────────────────────────────────────────────────────────────────────────
 # NETWORK
 # Traffic interception settings

@@ -24,6 +24,12 @@ import subprocess  # For running system commands (DNS cache flush)
 from pathlib import Path  # For filesystem operations
 from typing import List  # Type hints
 
+# === Internal module imports ===
+from logger import get_logger  # Structured logging
+
+# Module-level logger
+log = get_logger("hostsutil")
+
 # Path to the system hosts file
 ETC_HOSTS = Path("/etc/hosts")
 
@@ -138,8 +144,8 @@ def add_hosts(hosts: List[str]) -> None:
     lines.append(block)
     _write_hosts(lines)
 
-    print(f"Added {len(hosts)} host(s) to /etc/hosts")
-    print(
+    log.info("Added {n} host(s) to /etc/hosts", n=len(hosts))
+    log.info(
         "Note: You may need to flush DNS cache manually with: resolvectl flush-caches"
     )
 
@@ -157,7 +163,7 @@ def remove_hosts(hosts: List[str]) -> None:
     lines = _read_hosts()
     lines = _remove_existing_block(lines)
     _write_hosts(lines)
-    print(f"Removed {len(hosts)} host(s) from /etc/hosts")
+    log.info("Removed {n} host(s) from /etc/hosts", n=len(hosts))
 
 
 def is_enabled(hosts: List[str]) -> bool:
@@ -197,13 +203,11 @@ def flush_dns_cache() -> None:
     for cmd in methods:
         try:
             _run_command(cmd)
-            print(f"DNS cache flushed via {' '.join(cmd)}")
+            log.info("DNS cache flushed via {cmd}", cmd=" ".join(cmd))
             return
         except (FileNotFoundError, RuntimeError):
             continue  # Try next method
 
     # None of the methods worked
-    print("Warning: Could not flush DNS cache. You may need to flush manually:")
-    print("  resolvectl flush-caches")
-    print("  or")
-    print("  systemd-resolve --flush-caches")
+    log.warning("Could not flush DNS cache. You may need to flush manually:")
+    log.warning("  resolvectl flush-caches  or  systemd-resolve --flush-caches")
