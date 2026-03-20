@@ -70,8 +70,8 @@ class MITMServer:
                 - hosts: List of hostnames to intercept
         """
         self.config = config
-        # Default cert directory is ~/.free-tools
-        self.cert_dir = config.get("cert_dir", "~/.free-tools")
+        # cert_dir must be pre-resolved to an absolute path via _get_cert_dir()
+        self.cert_dir = config["cert_dir"]
 
         # Load or generate the Root CA keypair
         # If Root CA files exist in cert_dir, load them

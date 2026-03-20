@@ -1,5 +1,5 @@
 """
-DNS Manipulation Module for Free Tools MITM Proxy.
+DNS Manipulation Module for Free Antigravity MITM Proxy.
 
 This module manages /etc/hosts entries to redirect traffic to localhost.
 
@@ -9,14 +9,14 @@ How DNS spoofing works:
    the OS resolves the hostname to 127.0.0.1 (our proxy)
 3. Our MITM proxy receives the connection and handles it
 
-The entries are wrapped in marker comments (BEGIN/END FREE TOOLS MITM)
+The entries are wrapped in marker comments (BEGIN/END FREE ANTIGRAVITY MITM)
 so we can cleanly add and remove them without affecting other /etc/hosts entries.
 
 Example /etc/hosts block:
-    # BEGIN FREE TOOLS MITM
+    # BEGIN FREE ANTIGRAVITY MITM
     127.0.0.1 daily-cloudcode-pa.googleapis.com
     127.0.0.1 cloudcode-pa.googleapis.com
-    # END FREE TOOLS MITM
+    # END FREE ANTIGRAVITY MITM
 """
 
 # === Standard library imports ===
@@ -35,8 +35,8 @@ ETC_HOSTS = Path("/etc/hosts")
 
 # Marker comments used to identify our block in /etc/hosts
 # These allow us to cleanly add/remove entries without affecting other entries
-MARKER_START = "# BEGIN FREE TOOLS MITM"
-MARKER_END = "# END FREE TOOLS MITM"
+MARKER_START = "# BEGIN FREE ANTIGRAVITY MITM"
+MARKER_END = "# END FREE ANTIGRAVITY MITM"
 
 
 # =============================================================================
@@ -81,7 +81,7 @@ def _run_command(cmd: List[str]) -> None:
 
 def _remove_existing_block(lines: List[str]) -> List[str]:
     """
-    Remove the existing Free Tools block from /etc/hosts lines.
+    Remove the existing Free Antigravity block from /etc/hosts lines.
 
     Scans through the lines and removes everything between
     MARKER_START and MARKER_END (inclusive).
@@ -90,7 +90,7 @@ def _remove_existing_block(lines: List[str]) -> List[str]:
         lines: Current lines from /etc/hosts
 
     Returns:
-        Lines with the Free Tools block removed
+        Lines with the Free Antigravity block removed
     """
     result = []
     in_block = False
@@ -154,7 +154,7 @@ def remove_hosts(hosts: List[str]) -> None:
     """
     Remove our host entries from /etc/hosts.
 
-    Removes the entire Free Tools block (between markers).
+    Removes the entire Free Antigravity block (between markers).
     Other entries in /etc/hosts are not affected.
 
     Args:

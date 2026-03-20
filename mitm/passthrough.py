@@ -1,5 +1,5 @@
 """
-Transparent Passthrough Proxy for Free Tools MITM Proxy.
+Transparent Passthrough Proxy for Free Antigravity MITM Proxy.
 
 This module handles requests that should NOT be intercepted.
 When the MITM proxy receives a request that doesn't match any
@@ -40,7 +40,7 @@ log = get_logger("mitm.passthrough")
 # If we receive a request with this header, it means the request
 # came from our own proxy → drop it to prevent infinite loops.
 LOOP_HEADER = "x-request-source"
-LOOP_VALUE = "free-tools-mitm"
+LOOP_VALUE = "free-antigravity-mitm"
 
 
 def resolve_real_ip(hostname: str) -> str:

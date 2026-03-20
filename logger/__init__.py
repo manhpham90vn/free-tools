@@ -1,5 +1,5 @@
 """
-Free Tools Logger.
+Free Antigravity Logger.
 
 A structured, color-coded logging module built on top of Python's stdlib `logging`.
 Replaces ad-hoc `print()` calls throughout the codebase with typed, configurable loggers.
@@ -338,13 +338,13 @@ class _LoggerRegistry:
     """Singleton registry that manages the shared logging configuration."""
 
     def __init__(self) -> None:
-        self._root = logging.getLogger("free-tools")
+        self._root = logging.getLogger("free-antigravity")
         self._configured = False
         self._use_color = True
         self._file_handler: logging.Handler | None = None
 
     def get_logger(self, name: str) -> FreeLogger:
-        lib = logging.getLogger(f"free-tools.{name.lstrip('free-tools.')}")
+        lib = logging.getLogger(f"free-antigravity.{name.lstrip('free-antigravity.')}")
         return FreeLogger(lib)
 
     def setup(

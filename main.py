@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Free Tools - MITM Proxy.
+Free Antigravity - MITM Proxy.
 
 This program acts as a Man-in-the-Middle proxy that intercepts
 Gemini API requests and forwards them to a configurable custom endpoint.
@@ -34,10 +34,9 @@ from hostsutil import add_hosts, remove_hosts, flush_dns_cache, is_enabled
 # Generates a Root CA and per-domain leaf certificates so the proxy can
 # decrypt HTTPS traffic from the client
 from cert import (
-    install_ca,  # Generate Root CA (if needed) and install into system trust store
-    uninstall_ca,  # Remove Root CA from trust store and optionally delete files
+    load_or_create_root_ca,  # Generate Root CA (if needed) or load from disk
     trust_ca,  # Add Root CA to system trust store (requires root)
-    untrust_ca,  # Remove Root CA from system trust store
+    uninstall_ca,  # Remove Root CA from trust store and delete files
     ca_exists,  # Check if Root CA certificate files exist on disk
     is_trusted,  # Check if Root CA is currently trusted by the system
     get_ca_cert_path,  # Get the filesystem path to the Root CA .crt file
@@ -144,8 +143,8 @@ def ensure_root():
     # sudo may change HOME to /root and strip most env vars for security.
     # We must resolve all user-relative paths (~/) BEFORE calling sudo.
 
-    # Resolve ~/.free-tools to absolute path (e.g., /home/user/.free-tools)
-    cert_dir = str(Path("~/.free-tools").expanduser().resolve())
+    # Resolve ~/.free-antigravity to absolute path (e.g., /home/user/.free-antigravity)
+    cert_dir = str(Path("~/.free-antigravity").expanduser().resolve())
     # Resolve .env file path to absolute
     dotenv_path = str((_script_dir / ".env").resolve())
 
@@ -202,26 +201,24 @@ def ensure_root():
     os.execvp("sudo", cmd)
 
 
-def _resolve_config(config: dict) -> dict:
+def _get_cert_dir(config: dict) -> str:
     """
-    Resolve filesystem paths in the config dictionary.
+    Get the cert directory, preferring the env override then the config value.
 
-    When running under sudo, ~ expands to /root instead of /home/user.
-    To fix this, we resolve cert_dir BEFORE sudo and pass it via _FA_CERT_DIR env var.
-    This function uses that pre-resolved path if available.
+    Resolves ~/.free-antigravity to an absolute path so it always points to
+    the correct user directory — even when running under sudo where HOME
+    changes to /root.
 
     Args:
-        config: Raw configuration dictionary from YAML
+        config: Configuration dictionary loaded from YAML.
 
     Returns:
-        Config dictionary with cert_dir resolved to an absolute path
+        Absolute path to the cert directory.
     """
-    # Prefer the pre-resolved cert_dir from env (set before sudo escalation)
-    # Fall back to the value in config.yaml, then to the default
-    cert_dir = os.environ.get("_FA_CERT_DIR") or config.get("cert_dir", "~/.free-tools")
-    # expanduser() resolves ~, resolve() makes it absolute
-    config["cert_dir"] = str(Path(cert_dir).expanduser().resolve())
-    return config
+    raw = os.environ.get("_FA_CERT_DIR") or config.get(
+        "cert_dir", "~/.free-antigravity"
+    )
+    return str(Path(raw).expanduser().resolve())
 
 
 # =============================================================================
@@ -246,7 +243,8 @@ def cmd_start(args):
         args: Parsed argparse namespace (contains args.config path)
     """
     ensure_root()
-    config = _resolve_config(load_config(args.config))
+    config = load_config(args.config)
+    config["cert_dir"] = _get_cert_dir(config)
 
     # List of hostnames to intercept (e.g., daily-cloudcode-pa.googleapis.com)
     hosts = config.get("hosts", [])
@@ -294,7 +292,7 @@ def cmd_stop(args):
         args: Parsed argparse namespace
     """
     ensure_root()  # Need root to modify /etc/hosts
-    config = _resolve_config(load_config(args.config))
+    config = load_config(args.config)
 
     hosts = config.get("hosts", [])
 
@@ -304,80 +302,39 @@ def cmd_stop(args):
     log.banner("Stopped.")
 
 
-def cmd_install_ca(args):
+def cmd_setup_ca(args):
     """
-    Generate (if needed) and install the Root CA into the system trust store.
+    Generate (if needed) and trust the Root CA in the system store.
 
     This is a one-time setup step. After installation, the system will trust
     certificates signed by our Root CA, allowing the MITM proxy to intercept
     HTTPS traffic without certificate warnings.
 
     Args:
-        args: Parsed argparse namespace
+        args: Parsed argparse namespace (--force to re-install if already trusted)
     """
     config = load_config(args.config)
-    cert_dir = config.get("cert_dir", "~/.free-tools")
+    cert_dir = _get_cert_dir(config)
 
-    # install_ca() handles both generation and trust store installation
-    success = install_ca(cert_dir)
-    sys.exit(0 if success else 1)
+    # generate_root_ca() creates new CA if not exists
+    load_or_create_root_ca(cert_dir)
 
-
-def cmd_trust_ca(args):
-    """
-    Trust the Root CA in the system trust store.
-
-    Platform-specific behavior:
-    - Linux (Debian/Ubuntu): Copies cert to /usr/local/share/ca-certificates/
-      and runs update-ca-certificates
-    - Linux (Fedora/RHEL): Copies to /etc/pki/ca-trust/source/anchors/
-      and runs update-ca-trust
-    - macOS: Adds to System keychain with trustRoot setting
-
-    Args:
-        args: Parsed argparse namespace (may include --force flag)
-    """
-    config = load_config(args.config)
-    cert_dir = config.get("cert_dir", "~/.free-tools")
-
-    # force=True will reinstall even if already trusted
+    # trust_ca() installs to system trust store
     success = trust_ca(cert_dir, force=args.force)
     sys.exit(0 if success else 1)
 
 
-def cmd_untrust_ca(args):
+def cmd_remove_ca(args):
     """
-    Remove the Root CA from the system trust store.
-
-    The certificate files are NOT deleted — only the trust relationship
-    is removed. Use uninstall-ca --delete to also remove the files.
+    Remove the Root CA from the system trust store and delete files.
 
     Args:
         args: Parsed argparse namespace
     """
     config = load_config(args.config)
-    cert_dir = config.get("cert_dir", "~/.free-tools")
+    cert_dir = _get_cert_dir(config)
 
-    success = untrust_ca(cert_dir)
-    sys.exit(0 if success else 1)
-
-
-def cmd_uninstall_ca(args):
-    """
-    Fully uninstall the Root CA from the system.
-
-    Steps:
-    1. Remove from system trust store (untrust)
-    2. Optionally delete the certificate files (--delete flag)
-
-    Args:
-        args: Parsed argparse namespace (may include --delete flag)
-    """
-    config = load_config(args.config)
-    cert_dir = config.get("cert_dir", "~/.free-tools")
-
-    # delete_files=True will remove rootCA.crt and rootCA.key from disk
-    success = uninstall_ca(cert_dir, delete_files=args.delete)
+    success = uninstall_ca(cert_dir, delete_files=True)
     sys.exit(0 if success else 1)
 
 
@@ -396,9 +353,9 @@ def cmd_status(args):
     """
     config = load_config(args.config)
     hosts = config.get("hosts", [])
-    cert_dir = config.get("cert_dir", "~/.free-tools")
+    cert_dir = _get_cert_dir(config)
 
-    print("=== Free Tools Status ===")
+    print("=== Free Antigravity Status ===")
     print()
 
     # Check DNS spoofing status by looking for our marker block in /etc/hosts
@@ -416,7 +373,7 @@ def cmd_status(args):
         trusted = is_trusted(cert_dir)
         log.info("Trusted: {trusted}", trusted="Yes" if trusted else "No")
     else:
-        log.warning("Root CA: Not found (run install-ca first)")
+        log.warning("Root CA: Not found (run setup-ca first)")
 
     print()
     print(
@@ -435,20 +392,18 @@ def main():
     Main entry point — sets up the CLI argument parser and dispatches commands.
 
     Available commands:
-    - start:        Start the MITM proxy (requires root)
-    - stop:         Stop DNS spoofing and clean up /etc/hosts
-    - install-ca:   Generate and install Root CA into system trust store
-    - trust-ca:     Trust the Root CA (with optional --force)
-    - untrust-ca:   Remove Root CA from system trust store
-    - uninstall-ca: Full uninstall (with optional --delete to remove files)
-    - status:       Show current proxy status
+    - start:     Start the MITM proxy (requires root)
+    - stop:      Stop DNS spoofing and clean up /etc/hosts
+    - setup-ca:  Generate and trust Root CA in system store
+    - remove-ca: Remove Root CA from system and delete files
+    - status:    Show current proxy status
 
     Global options:
     - -c/--config:  Path to config file (default: config.yaml)
     """
     # Create the top-level argument parser
     parser = argparse.ArgumentParser(
-        description="Free Tools - MITM Proxy",
+        description="Free Antigravity - MITM Proxy",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
@@ -477,39 +432,24 @@ def main():
     )
     stop_parser.set_defaults(func=cmd_stop)
 
-    # --- install-ca command ---
-    ca_parser = subparsers.add_parser(
-        "install-ca",
-        help="Generate and install Root CA into system trust store",
+    # --- setup-ca command (generate + trust) ---
+    setup_ca_parser = subparsers.add_parser(
+        "setup-ca",
+        help="Generate and trust Root CA in system store",
     )
-    ca_parser.set_defaults(func=cmd_install_ca)
+    setup_ca_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Reinstall even if already trusted",
+    )
+    setup_ca_parser.set_defaults(func=cmd_setup_ca)
 
-    # --- trust-ca command (with --force option) ---
-    trust_parser = subparsers.add_parser(
-        "trust-ca",
-        help="Trust the Root CA in the system trust store",
+    # --- remove-ca command (untrust + delete) ---
+    remove_ca_parser = subparsers.add_parser(
+        "remove-ca",
+        help="Remove Root CA from system trust and delete files",
     )
-    trust_parser.add_argument(
-        "--force", action="store_true", help="Reinstall even if already trusted"
-    )
-    trust_parser.set_defaults(func=cmd_trust_ca)
-
-    # --- untrust-ca command ---
-    untrust_parser = subparsers.add_parser(
-        "untrust-ca",
-        help="Remove the Root CA from the system trust store",
-    )
-    untrust_parser.set_defaults(func=cmd_untrust_ca)
-
-    # --- uninstall-ca command (with --delete option) ---
-    uninstall_parser = subparsers.add_parser(
-        "uninstall-ca",
-        help="Uninstall Root CA from trust store and optionally delete files",
-    )
-    uninstall_parser.add_argument(
-        "--delete", action="store_true", help="Also delete CA certificate files"
-    )
-    uninstall_parser.set_defaults(func=cmd_uninstall_ca)
+    remove_ca_parser.set_defaults(func=cmd_remove_ca)
 
     # --- status command ---
     status_parser = subparsers.add_parser(

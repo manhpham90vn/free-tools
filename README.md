@@ -1,10 +1,10 @@
-# Free Tools
+# Free Antigravity
 
 A MITM proxy that intercepts requests from Antigravity IDE and forwards them to any LLM provider via custom Anthropic API endpoint.
 
 ## 🎯 Goals
 
-Use **Antigravity**, **Cursor**, **Claude Code**, **Codex**, and **Gemini CLI** with **any LLM provider**:
+Use **Antigravity** with **any LLM provider**:
 
 - **Claude** (Anthropic) - Opus, Sonnet, Haiku
 - **OpenAI** - GPT-4, GPT-4o, o1
@@ -27,8 +27,8 @@ Supports importing tokens from multiple sources and automatic protocol translati
 ### 1. Installation
 
 ```bash
-git clone https://github.com/manhpham90vn/free-tools.git
-cd free-tools
+git clone https://github.com/manhpham90vn/free-antigravity.git
+cd free-antigravity
 
 python -m venv .venv
 source .venv/bin/activate
@@ -66,7 +66,7 @@ model_mapping:
 ### 3. Install Root CA
 
 ```bash
-sudo python main.py install-ca
+sudo python main.py setup-ca
 ```
 
 ### 4. Run

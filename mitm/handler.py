@@ -1,5 +1,5 @@
 """
-Request Interceptor for Free Tools MITM Proxy.
+Request Interceptor for Free Antigravity MITM Proxy.
 
 This module contains the core request handling logic:
 - Provider detection: Identifies whether the request is from Gemini, OpenAI, or Claude
